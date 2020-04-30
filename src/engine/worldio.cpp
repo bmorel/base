@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <vector>
 // worldio.cpp: loading & saving of maps
 
 #include "engine.h"
@@ -619,10 +621,10 @@ void savevslot(stream *f, VSlot &vs, int prev)
     f->putlil<int>(prev);
     if(vs.changed & (1<<VSLOT_SHPARAM))
     {
-        ushort flags = vs.params.length();
-        loopv(vs.params) if(vs.params[i].palette || vs.params[i].palindex) flags |= 0x8000;
+        ushort flags = vs.params.size();
+        for( size_t i = 0; i < vs.params.size(); ++i ) if(vs.params[i].palette || vs.params[i].palindex) flags |= 0x8000;
         f->putlil<ushort>(flags);
-        loopv(vs.params)
+        for( size_t i = 0; i < vs.params.size(); ++i )
         {
             SlotShaderParam &p = vs.params[i];
             f->putlil<ushort>(strlen(p.name));
@@ -700,7 +702,7 @@ void loadvslot(stream *f, VSlot &vs, int changed)
         string name;
         loopi(numparams)
         {
-            SlotShaderParam &p = vs.params.add();
+            SlotShaderParam &p = (vs.params.emplace_back(  ), vs.params.back());
             int nlen = f->getlil<ushort>();
             f->read(name, min(nlen, MAXSTRLEN-1));
             name[min(nlen, MAXSTRLEN-1)] = '\0';
@@ -751,17 +753,17 @@ void loadvslots(stream *f, int numvslots)
         int changed = f->getlil<int>();
         if(changed < 0)
         {
-            loopi(-changed) vslots.add(new VSlot(NULL, vslots.length()));
+            loopi(-changed) vslots.add(new VSlot(NULL, vslots.size()));
             numvslots += changed;
         }
         else
         {
-            prev[vslots.length()] = f->getlil<int>();
-            loadvslot(f, *vslots.add(new VSlot(NULL, vslots.length())), changed);
+            prev[vslots.size()] = f->getlil<int>();
+            loadvslot(f, *vslots.add(new VSlot(NULL, vslots.size())), changed);
             numvslots--;
         }
     }
-    loopv(vslots) if(vslots.inrange(prev[i])) vslots[prev[i]]->next = vslots[i];
+    for( size_t i = 0; i < vslots.size(); ++i ) if(( 0 <= prev[i] && prev[i] < vslots.size() )) vslots[prev[i]]->next = vslots[i];
     delete[] prev;
 }
 
@@ -773,7 +775,7 @@ void saveslotconfig(stream *h, Slot &s, int index)
         {
             h->printf("setshader %s\n", escapeid(s.shader->name));
         }
-        loopvj(s.params)
+        for( size_t j = 0; j < s.params.size(); ++j )
         {
             h->printf("setshaderparam %s", escapeid(s.params[j].name));
             loopk(4) h->printf(" %f", s.params[j].val[k]);
@@ -781,7 +783,7 @@ void saveslotconfig(stream *h, Slot &s, int index)
             h->printf("\n");
         }
     }
-    loopvj(s.sts)
+    for( size_t j = 0; j < s.sts.size(); ++j )
     {
         h->printf("texture");
         if(index >= 0) h->printf(" %s", findtexturetypename(s.sts[j].type));
@@ -844,7 +846,7 @@ void save_config(char *mname)
     vector<ident *> ids;
     enumerate(idents, ident, id, ids.add(&id));
     ids.sortname();
-    loopv(ids)
+    for( size_t i = 0; i < ids.size(); ++i )
     {
         ident &id = *ids[i];
         if(id.flags&IDF_WORLD && !(id.flags&IDF_SERVER)) switch(id.type)
@@ -859,7 +861,7 @@ void save_config(char *mname)
     if(verbose >= 2) conoutf("wrote %d variable values", vars);
 
     int aliases = 0;
-    loopv(ids)
+    for( size_t i = 0; i < ids.size(); ++i )
     {
         ident &id = *ids[i];
         if(id.type == ID_ALIAS && id.flags&IDF_WORLD && !(id.flags&IDF_SERVER) && strlen(id.name))
@@ -891,24 +893,24 @@ void save_config(char *mname)
     }
     if(verbose) conoutf("saved %d material slots", nummats);
 
-    loopv(slots)
+    for( size_t i = 0; i < slots.size(); ++i )
     {
-        progress(i/float(slots.length()), "saving texture slots...");
+        progress(i/float(slots.size()), "saving texture slots...");
         saveslotconfig(h, *slots[i], i);
     }
-    if(verbose) conoutf("saved %d texture slots", slots.length());
+    if(verbose) conoutf("saved %d texture slots", slots.size());
 
-    loopv(mapmodels)
+    for( size_t i = 0; i < mapmodels.size(); ++i )
     {
-        progress(i/float(mapmodels.length()), "saving mapmodel slots...");
+        progress(i/float(mapmodels.size()), "saving mapmodel slots...");
         h->printf("mmodel %s\n", escapestring(mapmodels[i].name));
     }
-    if(mapmodels.length()) h->printf("\n");
-    if(verbose) conoutf("saved %d mapmodel slots", mapmodels.length());
+    if(mapmodels.size()) h->printf("\n");
+    if(verbose) conoutf("saved %d mapmodel slots", mapmodels.size());
 
-    loopv(mapsounds)
+    for( size_t i = 0; i < mapsounds.size(); ++i )
     {
-        progress(i/float(mapsounds.length()), "saving mapsound slots...");
+        progress(i/float(mapsounds.size()), "saving mapsound slots...");
         h->printf("mapsound %s", escapestring(mapsounds[i].name));
         if((mapsounds[i].vol > 0 && mapsounds[i].vol < 255) || mapsounds[i].maxrad > 0 || mapsounds[i].minrad >= 0)
             h->printf(" %d", mapsounds[i].vol);
@@ -916,8 +918,8 @@ void save_config(char *mname)
         if(mapsounds[i].minrad >= 0) h->printf(" %d", mapsounds[i].minrad);
         h->printf("\n");
     }
-    if(mapsounds.length()) h->printf("\n");
-    if(verbose) conoutf("saved %d mapsound slots", mapsounds.length());
+    if(mapsounds.size()) h->printf("\n");
+    if(verbose) conoutf("saved %d mapsound slots", mapsounds.size());
 
     delete h;
     if(verbose) conoutf("saved config %s", fname);
@@ -988,7 +990,7 @@ void save_world(const char *mname, bool nodata, bool forcesave)
     }
     game::savemap(forcesave, mapname);
 
-    int numvslots = vslots.length();
+    int numvslots = vslots.size();
     if(!nodata && !multiplayer(false))
     {
         numvslots = compactvslots();
@@ -1008,8 +1010,8 @@ void save_world(const char *mname, bool nodata, bool forcesave)
     copystring(gameid, server::gameid());
     memcpy(hdr.gameid, gameid, 4);
 
-    const vector<extentity *> &ents = entities::getents();
-    loopv(ents)
+    auto &ents = entities::getents();
+    for( size_t i = 0; i < ents.size(); ++i )
     {
         if(ents[i]->type!=ET_EMPTY || forcesave)
         {
@@ -1019,7 +1021,7 @@ void save_world(const char *mname, bool nodata, bool forcesave)
 
     hdr.numpvs = nodata ? 0 : getnumviewcells();
     hdr.blendmap = nodata ? 0 : shouldsaveblendmap();
-    hdr.lightmaps = nodata ? 0 : lightmaps.length();
+    hdr.lightmaps = nodata ? 0 : lightmaps.size();
 
     mapz tmp = hdr;
     lilswap(&tmp.version, 10);
@@ -1059,17 +1061,17 @@ void save_world(const char *mname, bool nodata, bool forcesave)
     if(verbose) conoutf("saved %d variables", vars);
 
     // texture slots
-    f->putlil<ushort>(texmru.length());
-    loopv(texmru) f->putlil<ushort>(texmru[i]);
+    f->putlil<ushort>(texmru.size());
+    for( size_t i = 0; i < texmru.size(); ++i ) f->putlil<ushort>(texmru[i]);
 
     // entities
     int count = 0;
     vector<int> remapents;
     if(!forcesave) entities::remapents(remapents);
-    loopv(ents) // extended
+    for( size_t i = 0; i < ents.size(); ++i ) // extended
     {
-        progress(i/float(ents.length()), "saving entities...");
-        int idx = remapents.inrange(i) ? remapents[i] : i;
+        progress(i/float(ents.size()), "saving entities...");
+        int idx = ( 0 <= i && i < remapents.size() ) ? remapents[i] : i;
         extentity &e = *(extentity *)ents[idx];
         if(e.type!=ET_EMPTY || forcesave)
         {
@@ -1081,23 +1083,23 @@ void save_world(const char *mname, bool nodata, bool forcesave)
             entities::writeent(f, idx);
             if(entities::maylink(e.type))
             {
-                vector<int> links;
+                std::vector<int> links;
                 int n = 0;
-                loopvk(ents)
+                for( size_t k = 0; k < ents.size(); ++k )
                 {
-                    int kidx = remapents.inrange(k) ? remapents[k] : k;
+                    int kidx = ( 0 <= k && k < remapents.size() ) ? remapents[k] : k;
                     extentity &f = (extentity &)*ents[kidx];
                     if(f.type != ET_EMPTY || forcesave)
                     {
                         if(entities::maylink(f.type) && e.links.find(kidx) >= 0)
-                            links.add(n); // align to indices
+                            links.emplace_back( n ); // align to indices
                         n++;
                     }
                 }
 
-                f->putlil<int>(links.length());
-                loopvj(links) f->putlil<int>(links[j]); // aligned index
-                if(verbose >= 2) conoutf("entity %s (%d) saved %d links", entities::findname(e.type), i, links.length());
+                f->putlil<int>(links.size());
+                for( size_t j = 0; j < links.size(); ++j ) f->putlil<int>(links[j]); // aligned index
+                if(verbose >= 2) conoutf("entity %s (%d) saved %d links", entities::findname(e.type), i, links.size());
             }
             count++;
         }
@@ -1112,9 +1114,9 @@ void save_world(const char *mname, bool nodata, bool forcesave)
 
     if(!nodata)
     {
-        loopv(lightmaps)
+        for( size_t i = 0; i < lightmaps.size(); ++i )
         {
-            progress(float(i)/float(lightmaps.length()), "saving lightmaps...");
+            progress(float(i)/float(lightmaps.size()), "saving lightmaps...");
             LightMap &lm = lightmaps[i];
             f->putchar(lm.type | (lm.unlitx>=0 ? 0x80 : 0));
             if(lm.unlitx>=0)
@@ -1124,7 +1126,7 @@ void save_world(const char *mname, bool nodata, bool forcesave)
             }
             f->write(lm.data, lm.bpp*LM_PACKW*LM_PACKH);
         }
-        if(verbose) conoutf("saved %d lightmaps", lightmaps.length());
+        if(verbose) conoutf("saved %d lightmaps", lightmaps.size());
         if(getnumviewcells()>0)
         {
             progress(0, "saving PVS...");
@@ -1568,12 +1570,12 @@ bool load_world(const char *mname, int crc)       // still supports all map form
 
         progress(0, "clearing world...");
 
-        texmru.shrink(0);
+        texmru.clear();
         if(hdr.version<14)
         {
             uchar oldtl[256];
             f->read(oldtl, sizeof(oldtl));
-            loopi(256) texmru.add(oldtl[i]);
+            loopi(256) texmru.emplace_back( oldtl[i] );
         }
         else
         {
@@ -1585,7 +1587,7 @@ bool load_world(const char *mname, int crc)       // still supports all map form
         worldroot = NULL;
 
         progress(0, "loading entities...");
-        vector<extentity *> &ents = entities::getents();
+        auto &ents = entities::getents();
         loopi(hdr.numents)
         {
             progress(i/float(hdr.numents), "loading entities...");
@@ -1610,7 +1612,7 @@ bool load_world(const char *mname, int crc)       // still supports all map form
                 loopk(numattr)
                 {
                     int val = f->getlil<int>();
-                    if(e.attrs.inrange(k)) e.attrs[k] = val;
+                    if(( 0 <= k && k < e.attrs.length() )) e.attrs[k] = val;
                 }
             }
             if((maptype == MAP_OCTA && hdr.version <= 27) || (maptype == MAP_MAPZ && hdr.version <= 31)) e.attrs[4] = 0; // init ever-present attr5
@@ -1726,7 +1728,7 @@ bool load_world(const char *mname, int crc)       // still supports all map form
             if(hdr.version >= 7) loopi(hdr.lightmaps)
             {
                 progress(i/(float)hdr.lightmaps, "loading lightmaps...");
-                LightMap &lm = lightmaps.add();
+                LightMap &lm = (lightmaps.emplace_back(  ), lightmaps.back());
                 if(hdr.version >= 17)
                 {
                     int type = f->getchar();
@@ -1750,7 +1752,7 @@ bool load_world(const char *mname, int crc)       // still supports all map form
         }
 
         progress(0, "initialising entities...");
-        loopv(ents)
+        for( size_t i = 0; i < ents.size(); ++i )
         {
             extentity &e = *ents[i];
 
@@ -1758,7 +1760,7 @@ bool load_world(const char *mname, int crc)       // still supports all map form
             {
                 int closest = -1;
                 float closedist = 1e10f;
-                loopvk(ents) if(ents[k]->type == ET_LIGHT)
+                for( size_t k = 0; k < ents.size(); ++k ) if(ents[k]->type == ET_LIGHT)
                 {
                     extentity &a = *ents[k];
                     float dist = e.o.dist(a.o);
@@ -1768,7 +1770,7 @@ bool load_world(const char *mname, int crc)       // still supports all map form
                         closedist = dist;
                     }
                 }
-                if(ents.inrange(closest) && closedist <= 100)
+                if(( 0 <= closest && closest < ents.size() ) && closedist <= 100)
                 {
                     extentity &a = *ents[closest];
                     if(e.links.find(closest) < 0) e.links.add(closest);
@@ -1836,14 +1838,14 @@ void writeobj(char *name)
     defformatstring(mtlname, "%s.mtl", name);
     path(mtlname);
     f->printf("mtllib %s\n\n", mtlname);
-    vector<vec> verts;
-    vector<vec2> texcoords;
+    std::vector<vec> verts;
+    std::vector<vec2> texcoords;
     hashtable<vec, int> shareverts(1<<16);
     hashtable<vec2, int> sharetc(1<<16);
-    hashtable<int, vector<ivec2> > mtls(1<<8);
-    vector<int> usedmtl;
+    hashtable<int, std::vector<ivec2> > mtls(1<<8);
+    std::vector<int> usedmtl;
     vec bbmin(1e16f, 1e16f, 1e16f), bbmax(-1e16f, -1e16f, -1e16f);
-    loopv(valist)
+    for( size_t i = 0; i < valist.size(); ++i )
     {
         vtxarray &va = *valist[i];
         ushort *edata = NULL;
@@ -1853,27 +1855,27 @@ void writeobj(char *name)
         loopj(va.texs)
         {
             elementset &es = va.eslist[j];
-            if(usedmtl.find(es.texture) < 0) usedmtl.add(es.texture);
-            vector<ivec2> &keys = mtls[es.texture];
+            if(find( usedmtl, es.texture ) < 0) usedmtl.emplace_back( es.texture );
+            std::vector<ivec2> &keys = mtls[es.texture];
             loopk(es.length[1])
             {
                 int n = idx[k] - va.voffset;
                 const vertex &v = vdata[n];
                 const vec &pos = v.pos;
                 const vec2 &tc = v.tc;
-                ivec2 &key = keys.add();
-                key.x = shareverts.access(pos, verts.length());
-                if(key.x == verts.length())
+                ivec2 &key = (keys.emplace_back(  ), keys.back());
+                key.x = shareverts.access(pos, verts.size());
+                if(key.x == verts.size())
                 {
-                    verts.add(pos);
+                    verts.emplace_back( pos );
                     loopl(3)
                     {
                         bbmin[l] = min(bbmin[l], pos[l]);
                         bbmax[l] = max(bbmax[l], pos[l]);
                     }
                 }
-                key.y = sharetc.access(tc, texcoords.length());
-                if(key.y == texcoords.length()) texcoords.add(tc);
+                key.y = sharetc.access(tc, texcoords.size());
+                if(key.y == texcoords.size()) texcoords.emplace_back( tc );
             }
             idx += es.length[1];
         }
@@ -1882,29 +1884,29 @@ void writeobj(char *name)
     }
 
     vec center(-(bbmax.x + bbmin.x)/2, -(bbmax.y + bbmin.y)/2, -bbmin.z);
-    loopv(verts)
+    for( size_t i = 0; i < verts.size(); ++i )
     {
         vec v = verts[i];
-        v.add(center);
+        v.add( center );
         if(v.y != floor(v.y)) f->printf("v %.3f ", -v.y); else f->printf("v %d ", int(-v.y));
         if(v.z != floor(v.z)) f->printf("%.3f ", v.z); else f->printf("%d ", int(v.z));
         if(v.x != floor(v.x)) f->printf("%.3f\n", v.x); else f->printf("%d\n", int(v.x));
     }
     f->printf("\n");
-    loopv(texcoords)
+    for( size_t i = 0; i < texcoords.size(); ++i )
     {
         const vec2 &tc = texcoords[i];
         f->printf("vt %.6f %.6f\n", tc.x, 1-tc.y);
     }
     f->printf("\n");
 
-    usedmtl.sort();
-    loopv(usedmtl)
+    std::sort( usedmtl.begin(), usedmtl.end() );
+    for( size_t i = 0; i < usedmtl.size(); ++i )
     {
-        vector<ivec2> &keys = mtls[usedmtl[i]];
+        std::vector<ivec2> &keys = mtls[usedmtl[i]];
         f->printf("g slot%d\n", usedmtl[i]);
         f->printf("usemtl slot%d\n\n", usedmtl[i]);
-        for(int i = 0; i < keys.length(); i += 3)
+        for(int i = 0; i < keys.size(); i += 3)
         {
             f->printf("f");
             loopk(3) f->printf(" %d/%d", keys[i+2-k].x+1, keys[i+2-k].y+1);
@@ -1917,7 +1919,7 @@ void writeobj(char *name)
     f = openfile(mtlname, "w");
     if(!f) return;
     f->printf("# mtl file of map\n\n");
-    loopv(usedmtl)
+    for( size_t i = 0; i < usedmtl.size(); ++i )
     {
         VSlot &vslot = lookupvslot(usedmtl[i], false);
         f->printf("newmtl slot%d\n", usedmtl[i]);
