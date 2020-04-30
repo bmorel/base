@@ -1,3 +1,6 @@
+#ifndef BIH_H
+#define BIH_H
+
 struct BIH
 {
     struct node
@@ -62,7 +65,7 @@ struct BIH
     vec bbmin, bbmax, center;
     float radius, entradius;
 
-    BIH(vector<mesh> &buildmeshes);
+    BIH(std::vector<mesh> &buildmeshes);
 
     ~BIH();
 
@@ -77,3 +80,4 @@ struct BIH
 
 extern bool mmintersect(const extentity &e, const vec &o, const vec &ray, float maxdist, int mode, float &dist);
 
+#endif
