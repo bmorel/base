@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <vector>
 #include "engine.h"
 
 enum
@@ -523,28 +525,28 @@ struct BlendBrush
     }
 };
 
-static vector<BlendBrush *> brushes;
+static std::vector<BlendBrush *> brushes;
 static int curbrush = -1;
 
 void cleanupblendmap()
 {
-    loopv(brushes) brushes[i]->cleanup();
+    for( size_t i = 0; i < brushes.size(); ++i ) brushes[i]->cleanup();
 }
 
 void clearblendbrushes()
 {
-    while(brushes.length()) delete brushes.pop();
+    while(brushes.size()) brushes.pop_back();
     curbrush = -1;
 }
 
 void delblendbrush(const char *name)
 {
-    loopv(brushes) if(!strcmp(brushes[i]->name, name))
+    for( size_t i = 0; i < brushes.size(); ++i ) if(!strcmp(brushes[i]->name, name))
     {
         delete brushes[i];
-        brushes.remove(i--);
+        brushes.erase( brushes.begin() + i-- );
     }
-    curbrush = brushes.empty() ? -1 : clamp(curbrush, 0, brushes.length()-1);
+    curbrush = brushes.empty() ? -1 : clamp(curbrush, 0, (int)(brushes.size())-1);
 }
 
 void addblendbrush(const char *name, const char *imgname)
@@ -569,9 +571,9 @@ void addblendbrush(const char *name, const char *imgname)
         srcrow += s.pitch;
     }
 
-    brushes.add(brush);
+    brushes.emplace_back( brush );
     if(curbrush < 0) curbrush = 0;
-    else if(curbrush >= brushes.length()) curbrush = brushes.length()-1;
+    else if(curbrush >= brushes.size()) curbrush = brushes.size()-1;
 
 }
 
@@ -579,17 +581,17 @@ void nextblendbrush(int *dir)
 {
     curbrush += *dir < 0 ? -1 : 1;
     if(brushes.empty()) curbrush = -1;
-    else if(!brushes.inrange(curbrush)) curbrush = *dir < 0 ? brushes.length()-1 : 0;
+    else if(!( 0 <= curbrush && curbrush < brushes.size() )) curbrush = *dir < 0 ? brushes.size()-1 : 0;
 }
 
 void setblendbrush(const char *name)
 {
-    loopv(brushes) if(!strcmp(brushes[i]->name, name)) { curbrush = i; break; }
+    for( size_t i = 0; i < brushes.size(); ++i ) if(!strcmp(brushes[i]->name, name)) { curbrush = i; break; }
 }
 
 void getblendbrushname(int *n)
 {
-    result(brushes.inrange(*n) ? brushes[*n]->name : "");
+    result(( 0 <= *n && *n < brushes.size() ) ? brushes[*n]->name : "");
 }
 
 void curblendbrush()
@@ -613,7 +615,7 @@ bool canpaintblendmap(bool brush = true, bool sel = false, bool msg = true)
         conoutft(CON_MESG, "\froperation only allowed in blend paint mode");
         return false;
     }
-    if(brush && !brushes.inrange(curbrush))
+    if(brush && !( 0 <= curbrush && curbrush < brushes.size() ))
     {
         if(msg) conoutft(CON_MESG, "\frno blend brush selected");
         return false;
@@ -729,7 +731,7 @@ ICOMMAND(0, clearblendmap, "", (),
 
 void renderblendbrush()
 {
-    if(!blendpaintmode || !brushes.inrange(curbrush)) return;
+    if(!blendpaintmode || !( 0 <= curbrush && curbrush < brushes.size() )) return;
 
     BlendBrush *brush = brushes[curbrush];
     int x1 = (int)floor(clamp(worldpos.x, 0.0f, float(hdr.worldsize))/(1<<BM_SCALE) - 0.5f*brush->w) << BM_SCALE,
