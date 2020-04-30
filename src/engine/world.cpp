@@ -1,5 +1,6 @@
 // world.cpp: core map management stuff
 #include <algorithm>
+#include <string>
 using std::swap;
 
 #include "engine.h"
@@ -92,16 +93,16 @@ void modifyoctaentity(int flags, int id, extentity &e, cube *c, const ivec &cor,
                         if(va)
                         {
                             va->bbmin.x = -1;
-                            if(oe.mapmodels.empty()) va->mapmodels.add(&oe);
+                            if(oe.mapmodels.empty()) va->mapmodels.emplace_back( &oe );
                         }
-                        oe.mapmodels.add(id);
+                        oe.mapmodels.emplace_back( id );
                         oe.bbmin.min(bo).max(oe.o);
                         oe.bbmax.max(br).min(ivec(oe.o).add(oe.size));
                         break;
                     }
                     // invisible mapmodel
                 default:
-                    oe.other.add(id);
+                    oe.other.emplace_back( id );
                     break;
             }
 
@@ -122,7 +123,7 @@ void modifyoctaentity(int flags, int id, extentity &e, cube *c, const ivec &cor,
                         }
                         oe.bbmin = oe.bbmax = oe.o;
                         oe.bbmin.add(oe.size);
-                        loopvj(oe.mapmodels)
+                        for( size_t j = 0; j < oe.mapmodels.size(); ++j )
                         {
                             extentity &e = *entities::getents()[oe.mapmodels[j]];
                             ivec eo, er;
@@ -167,10 +168,10 @@ static bool modifyoctaent(int flags, int id, extentity &e)
 
     if(!insideworld(e.o))
     {
-        int idx = outsideents.find(id);
+        int idx = find( outsideents, id );
         if(flags&MODOE_ADD)
         {
-            if(idx < 0) outsideents.add(id);
+            if(idx < 0) outsideents.emplace_back( id );
         }
         else if(idx >= 0) outsideents.removeunordered(idx);
     }
@@ -190,23 +191,19 @@ static bool modifyoctaent(int flags, int id, extentity &e)
 
 static inline bool modifyoctaent(int flags, int id)
 {
-    vector<extentity *> &ents = entities::getents();
-    return ents.inrange(id) && modifyoctaent(flags, id, *ents[id]);
+    auto &ents = entities::getents();
+    return ( 0 <= id && id < ents.size() ) && modifyoctaent(flags, id, *ents[id]);
 }
 
 static inline void addentity(int id)    { modifyoctaent(MODOE_ADD|MODOE_UPDATEBB|MODOE_LIGHTENT, id); }
-static inline void removeentity(int id) { modifyoctaent(MODOE_UPDATEBB, id); }
 
 void freeoctaentities(cube &c)
 {
     if(!c.ext) return;
-    if(entities::getents().length())
+    if(entities::getents().size() && c.ext->ents )
     {
-        while(c.ext->ents && !c.ext->ents->mapmodels.empty()) removeentity(c.ext->ents->mapmodels.pop());
-        while(c.ext->ents && !c.ext->ents->other.empty())    removeentity(c.ext->ents->other.pop());
-    }
-    if(c.ext->ents)
-    {
+        c.ext->ents->mapmodels.clear();
+        c.ext->ents->other.clear();
         delete c.ext->ents;
         c.ext->ents = NULL;
     }
@@ -214,22 +211,22 @@ void freeoctaentities(cube &c)
 
 void entitiesinoctanodes()
 {
-    vector<extentity *> &ents = entities::getents();
-    loopv(ents) modifyoctaent(MODOE_ADD, i, *ents[i]);
+    auto &ents = entities::getents();
+    for( size_t i = 0; i < ents.size(); ++i ) modifyoctaent(MODOE_ADD, i, *ents[i]);
 }
 
-static inline void findents(octaentities &oe, int low, int high, bool notspawned, const vec &pos, const vec &invradius, vector<int> &found)
+static inline void findents(octaentities &oe, int low, int high, bool notspawned, const vec &pos, const vec &invradius, std::vector<int> &found)
 {
-    vector<extentity *> &ents = entities::getents();
-    loopv(oe.other)
+    auto &ents = entities::getents();
+    for( size_t i = 0; i < oe.other.size(); ++i )
     {
         int id = oe.other[i];
         extentity &e = *ents[id];
-        if(e.type >= low && e.type <= high && (e.spawned() || notspawned) && vec(e.o).sub(pos).mul(invradius).squaredlen() <= 1) found.add(id);
+        if(e.type >= low && e.type <= high && (e.spawned() || notspawned) && vec(e.o).sub(pos).mul(invradius).squaredlen() <= 1) found.emplace_back(id);
     }
 }
 
-static inline void findents(cube *c, const ivec &o, int size, const ivec &bo, const ivec &br, int low, int high, bool notspawned, const vec &pos, const vec &invradius, vector<int> &found)
+static inline void findents(cube *c, const ivec &o, int size, const ivec &bo, const ivec &br, int low, int high, bool notspawned, const vec &pos, const vec &invradius, std::vector<int> &found)
 {
     loopoctabox(o, size, bo, br)
     {
@@ -242,7 +239,7 @@ static inline void findents(cube *c, const ivec &o, int size, const ivec &bo, co
     }
 }
 
-void findents(int low, int high, bool notspawned, const vec &pos, const vec &radius, vector<int> &found)
+void findents(int low, int high, bool notspawned, const vec &pos, const vec &radius, std::vector<int> &found)
 {
     vec invradius(1/radius.x, 1/radius.y, 1/radius.z);
     ivec bo(vec(pos).sub(radius).sub(1)),
@@ -293,32 +290,32 @@ vector<int> entgroup;
 
 bool haveselent()
 {
-    return entgroup.length() > 0;
+    return entgroup.size() > 0;
 }
 
 void entcancel()
 {
-    entgroup.shrink(0);
+    entgroup.clear();
 }
 
 void entadd(int id)
 {
     undonext = true;
-    entgroup.add(id);
+    entgroup.emplace_back( id );
 }
 
 undoblock *newundoent()
 {
-    int numents = entgroup.length();
+    int numents = entgroup.size();
     if(numents <= 0) return NULL;
-    vector<extentity *> &ents = entities::getents();
+    auto &ents = entities::getents();
     int numattrs = 0;
-    loopv(entgroup) numattrs += ents[entgroup[i]]->attrs.length();
+    for( size_t i = 0; i < entgroup.size(); ++i ) numattrs += ents[entgroup[i]]->attrs.length();
     undoblock *u = (undoblock *)new uchar[sizeof(undoblock) + numents*sizeof(undoent) + numattrs*sizeof(int)];
     u->numents = numents;
     undoent *e = (undoent *)(u + 1);
     int *attr = (int *)(e + numents);
-    loopv(entgroup)
+    for( size_t i = 0; i < entgroup.size(); ++i )
     {
         extentity *g = ents[entgroup[i]];
         e->i = entgroup[i];
@@ -349,16 +346,16 @@ void makeundoent()
 { \
     entfocusv(i, \
     { \
-        removeentity(n);  \
+        modifyoctaent(MODOE_UPDATEBB, n);  \
         f; \
         if(e.type!=ET_EMPTY) { addentity(n); } \
         entities::editent(n); \
     }, v); \
 }
 #define entedit(i, f)   enteditv(i, f, entities::getents())
-#define addgroup(exp)   { vector<extentity *> &ents = entities::getents(); loopv(ents) entfocusv(i, if(exp) entadd(n), ents); }
+#define addgroup(exp)   { auto &ents = entities::getents(); for( size_t i = 0; i < ents.size(); ++i ) entfocusv(i, if(exp) entadd(n), ents); }
 #define setgroup(exp)   { entcancel(); addgroup(exp); }
-#define groupeditloop(f){ vector<extentity *> &ents = entities::getents(); entlooplevel++; int _ = efocus; loopv(entgroup) enteditv(entgroup[i], f, ents); efocus = _; entlooplevel--; }
+#define groupeditloop(f){ auto &ents = entities::getents(); entlooplevel++; int _ = efocus; for( size_t i = 0; i < entgroup.size(); ++i ) enteditv(entgroup[i], f, ents); efocus = _; entlooplevel--; }
 #define groupeditpure(f){ if(entlooplevel>0) { entedit(efocus, f); } else groupeditloop(f); }
 #define groupeditundo(f){ makeundoent(); groupeditpure(f); }
 #define groupedit(f)    { addimplicit(groupeditundo(f)); }
@@ -378,8 +375,8 @@ undoblock *copyundoents(undoblock *u)
 void pasteundoent(int idx, const vec &o, int type, int *attrs, int numattrs)
 {
     if(idx < 0 || idx >= MAXENTS) return;
-    vector<extentity *> &ents = entities::getents();
-    while(ents.length() < idx) ents.add(entities::newent())->type = ET_EMPTY;
+    auto &ents = entities::getents();
+    while(ents.size() < idx) ents.add(entities::newent())->type = ET_EMPTY;
     numattrs = min(numattrs, MAXENTATTRS);
     int efocus = -1, minattrs = entities::numattrs(type);
     entedit(idx,
@@ -469,7 +466,7 @@ void entdrag(const vec &ray)
     int d = dimension(entorient),
         dc= dimcoord(entorient);
 
-    entfocus(entgroup.last(),
+    entfocus(entgroup.back(),
         entselectionbox(e, eo, es);
 
         if(!editmoveplane(e.o, ray, d, eo[d] + (dc ? es[d] : 0), handle, v, entmoving==1))
@@ -517,12 +514,12 @@ void renderentselection(const vec &o, const vec &ray, bool entmoving)
     if(noentedit()) return;
     vec eo, es;
 
-    if(entgroup.length())
+    if(entgroup.size())
     {
         gle::colorub(0, 40, 0);
         gle::defvertex();
-        gle::begin(GL_LINES, entgroup.length()*24);
-        loopv(entgroup) entfocus(entgroup[i],
+        gle::begin(GL_LINES, entgroup.size()*24);
+        for( size_t i = 0; i < entgroup.size(); ++i ) entfocus(entgroup[i],
             entselectionbox(e, eo, es);
             renderentbox(eo, es);
         );
@@ -551,11 +548,11 @@ void renderentselection(const vec &o, const vec &ray, bool entmoving)
 bool enttoggle(int id)
 {
     undonext = true;
-    int i = entgroup.find(id);
+    int i = find( entgroup, id );
     if(i < 0)
         entadd(id);
     else
-        entgroup.remove(i);
+        entgroup.erase( entgroup.begin() + i );
     return i < 0;
 }
 
@@ -565,7 +562,7 @@ bool hoveringonent(int ent, int orient)
     entorient = orient;
     if((efocus = enthover = ent) >= 0)
         return true;
-    efocus  = entgroup.empty() ? -1 : entgroup.last();
+    efocus  = entgroup.empty() ? -1 : entgroup.back();
     enthover = -1;
     return false;
 }
@@ -576,7 +573,7 @@ ICOMMAND(0, entadd, "", (),
 {
     if(enthover >= 0 && !noentedit())
     {
-        if(entgroup.find(enthover) < 0) entadd(enthover);
+        if(find( entgroup, enthover ) < 0) entadd(enthover);
         if(entmoving > 1) entmoving = 1;
     }
 });
@@ -594,7 +591,7 @@ ICOMMAND(0, entmoving, "b", (int *n),
         if(!*n || enthover < 0 || noentedit()) entmoving = 0;
         else
         {
-            if(entgroup.find(enthover) < 0) { entadd(enthover); entmoving = 1; }
+            if(find( entgroup, enthover ) < 0) { entadd(enthover); entmoving = 1; }
             else if(!entmoving) entmoving = 1;
         }
     }
@@ -633,8 +630,8 @@ void entautoview(int *dir)
     v.normalize();
     v.mul(entautoviewdist);
     int t = s + *dir;
-    s = abs(t) % entgroup.length();
-    if(t<0 && s>0) s = entgroup.length() - s;
+    s = abs(t) % entgroup.size();
+    if(t<0 && s>0) s = entgroup.size() - s;
     entfocus(entgroup[s],
         v.add(e.o);
         player->o = v;
@@ -728,14 +725,14 @@ static int keepents = 0;
 
 extentity *newentity(bool local, const vec &o, int type, const attrvector &attrs, int &idx, bool fix = true)
 {
-    vector<extentity *> &ents = entities::getents();
+    auto &ents = entities::getents();
     if(local)
     {
         idx = -1;
-        for(int i = keepents; i < ents.length(); i++)  if(ents[i]->type == ET_EMPTY) { idx = i; break; }
-        if(idx < 0 && ents.length() >= MAXENTS) { conoutft(CON_MESG, "\frtoo many entities"); return NULL; }
+        for(int i = keepents; i < ents.size(); i++)  if(ents[i]->type == ET_EMPTY) { idx = i; break; }
+        if(idx < 0 && ents.size() >= MAXENTS) { conoutft(CON_MESG, "\frtoo many entities"); return NULL; }
     }
-    else while(ents.length() < idx) ents.add(entities::newent())->type = ET_EMPTY;
+    else while(ents.size() < idx) ents.add(entities::newent())->type = ET_EMPTY;
     extentity &e = *entities::newent();
     e.o = o;
     e.attrs.add(0, min(attrs.length(), MAXENTATTRS) - e.attrs.length());
@@ -743,8 +740,8 @@ extentity *newentity(bool local, const vec &o, int type, const attrvector &attrs
     e.type = type;
     e.light.color = vec(1, 1, 1);
     e.light.dir = vec(0, 0, 1);
-    if(ents.inrange(idx)) { entities::deleteent(ents[idx]); ents[idx] = &e; }
-    else { idx = ents.length(); ents.add(&e); }
+    if(( 0 <= idx && idx < ents.size() )) { entities::deleteent(ents[idx]); ents[idx] = &e; }
+    else { idx = ents.size(); ents.emplace_back( &e ); }
     if(local && fix) entities::fixentity(idx, true, true);
     return &e;
 }
@@ -776,12 +773,11 @@ int newentity(int type, const attrvector &attrs)
 
 void entattrs(const char *str, attrvector &attrs)
 {
-    static vector<char *> buf;
+    static std::vector<std::string> buf;
     explodelist(str, buf, MAXENTATTRS);
     attrs.setsize(0);
-    attrs.add(0, buf.length());
-    loopv(buf) attrs[i] = parseint(buf[i]);
-    buf.deletearrays();
+    attrs.add(0, buf.size());
+    for( size_t i = 0; i < buf.size(); ++i ) attrs[i] = parseint(buf[i].data());
 }
 
 void newent(char *what, char *attr)
@@ -794,24 +790,24 @@ void newent(char *what, char *attr)
 }
 
 int entcopygrid;
-vector<entity> entcopybuf;
+std::vector<entity> entcopybuf;
 
 void entcopy()
 {
     if(noentedit()) return;
     entcopygrid = sel.grid;
-    entcopybuf.shrink(0);
-    loopv(entgroup)
-        entfocus(entgroup[i], entcopybuf.add(e).o.sub(vec(sel.o)));
+    entcopybuf.clear();
+    for( size_t i = 0; i < entgroup.size(); ++i )
+        entfocus(entgroup[i], (entcopybuf.emplace_back( e ),entcopybuf.back()).o.sub(vec(sel.o)));
 }
 
 void entpaste()
 {
     if(noentedit()) return;
-    if(entcopybuf.length()==0) return;
+    if(entcopybuf.size()==0) return;
     entcancel();
     float m = float(sel.grid)/float(entcopygrid);
-    loopv(entcopybuf)
+    for( size_t i = 0; i < entcopybuf.size(); ++i )
     {
         entity &c = entcopybuf[i];
         vec o(c.o);
@@ -836,18 +832,18 @@ COMMAND(0, entpaste, "");
 
 void entlink()
 {
-    if(entgroup.length() > 1)
+    if(entgroup.size() > 1)
     {
-        const vector<extentity *> &ents = entities::getents();
+        auto const &ents = entities::getents();
         int index = entgroup[0];
-        if(ents.inrange(index))
+        if(( 0 <= index && index < ents.size() ))
         {
-            loopi(entgroup.length()-1)
+            loopi(entgroup.size()-1)
             {
                 int node = entgroup[i+1];
 
                 if(verbose >= 2) conoutf("\faattempting to link %d and %d (%d)", index, node, i+1);
-                if(ents.inrange(node))
+                if(( 0 <= node && node < ents.size() ))
                 {
                     if(!entities::linkents(index, node) && !entities::linkents(node, index))
                         conoutf("\frfailed linking %d and %d (%d)", index, node, i+1);
@@ -879,8 +875,8 @@ void entset(char *what, char *attr)
     });
 }
 
-ICOMMAND(0, enthavesel,"", (), addimplicit(intret(entgroup.length())));
-ICOMMAND(0, entselect, "e", (uint *body), if(!noentedit()) addgroup(e.type != ET_EMPTY && entgroup.find(n)<0 && executebool(body)));
+ICOMMAND(0, enthavesel,"", (), addimplicit(intret(entgroup.size())));
+ICOMMAND(0, entselect, "e", (uint *body), if(!noentedit()) addgroup(e.type != ET_EMPTY && find( entgroup, n )<0 && executebool(body)));
 ICOMMAND(0, entloop, "e", (uint *body), if(!noentedit()) addimplicit(groupeditloop(((void)e, execute(body)))));
 ICOMMAND(0, insel, "", (), entfocus(efocus, intret(pointinsel(sel, e.o))));
 ICOMMAND(0, entget, "", (), entfocus(efocus, {
@@ -940,16 +936,16 @@ void entprop(int *attr, int *val)
 }
 COMMAND(0, entprop, "ii");
 
-int findentity(int type, int index, vector<int> &attr)
+int findentity(int type, int index, std::vector<int> &attr)
 {
-    const vector<extentity *> &ents = entities::getents();
-    for(int i = index; i<ents.length(); i++)
+    auto const &ents = entities::getents();
+    for(int i = index; i<ents.size(); i++)
     {
         extentity &e = *ents[i];
         if(e.type==type)
         {
             bool find = true;
-            loopvk(attr) if(!e.attrs.inrange(k) || e.attrs[k] != attr[k])
+            for( size_t k = 0; k < attr.size(); ++k ) if(!e.attrs.inrange(k) || e.attrs[k] != attr[k])
             {
                 find = false;
                 break;
@@ -957,13 +953,13 @@ int findentity(int type, int index, vector<int> &attr)
             if(find) return i;
         }
     }
-    loopj(min(index, ents.length()))
+    loopj(min(index, ents.size()))
     {
         extentity &e = *ents[j];
         if(e.type==type)
         {
             bool find = true;
-            loopvk(attr) if(!e.attrs.inrange(k) || e.attrs[k] != attr[k])
+            for( size_t k = 0; k < attr.size(); ++k ) if(!e.attrs.inrange(k) || e.attrs[k] != attr[k])
             {
                 find = false;
                 break;
@@ -1029,7 +1025,7 @@ void resetmap(bool empty)
     setsvar("maptext", "", false);
     mapcrc = 0;
     entities::clearents();
-    outsideents.setsize(0);
+    outsideents.clear();
     game::resetmap(empty);
 }
 
@@ -1058,7 +1054,7 @@ bool emptymap(int scale, bool force, char *mname, bool nocfg)   // main empty wo
 
     copystring(hdr.gameid, server::gameid(), 4);
 
-    texmru.shrink(0);
+    texmru.clear();
     freeocta(worldroot);
     worldroot = newcubes(F_EMPTY);
     loopi(4) solidfaces(worldroot[i]);
@@ -1087,7 +1083,7 @@ bool enlargemap(bool split, bool force)
         return false;
     }
     if(hdr.worldsize >= 1<<16) return false;
-    while(outsideents.length()) removeentity(outsideents.pop());
+    while(outsideents.size()) modifyoctaent(MODOE_UPDATEBB, outsideents.pop());
 
     worldscale++;
     hdr.worldsize *= 2;
@@ -1134,7 +1130,7 @@ void shrinkmap()
     }
     if(octant < 0) return;
 
-    while(outsideents.length()) removeentity(outsideents.pop());
+    while(outsideents.size()) modifyoctaent(MODOE_UPDATEBB, outsideents.pop());
 
     if(!worldroot[octant].children) subdividecube(worldroot[octant], false, false);
     cube *root = worldroot[octant].children;
@@ -1145,8 +1141,8 @@ void shrinkmap()
     hdr.worldsize /= 2;
 
     ivec offset(octant, ivec(0, 0, 0), hdr.worldsize);
-    vector<extentity *> &ents = entities::getents();
-    loopv(ents) ents[i]->o.sub(vec(offset));
+    auto &ents = entities::getents();
+    for( size_t i = 0; i < ents.size(); ++i ) ents[i]->o.sub(vec(offset));
 
     shrinkblendmap(octant);
 
@@ -1168,8 +1164,8 @@ ICOMMAND(0, mapsize, "", (void),
 void mpeditent(int i, const vec &o, int type, attrvector &attr, bool local)
 {
     if(i < 0 || i >= MAXENTS) return;
-    vector<extentity *> &ents = entities::getents();
-    if(ents.length()<=i)
+    auto &ents = entities::getents();
+    if(ents.size()<=i)
     {
         if(newentity(local, o, type, attr, i))
             addentity(i);
@@ -1177,7 +1173,7 @@ void mpeditent(int i, const vec &o, int type, attrvector &attr, bool local)
     else
     {
         extentity &e = *ents[i];
-        removeentity(i);
+        modifyoctaent(MODOE_UPDATEBB, i);
         e.type = type;
         e.o = o;
         e.attrs.add(0, max(entities::numattrs(e.type), min(attr.length(), MAXENTATTRS)) - e.attrs.length());
