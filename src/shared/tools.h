@@ -577,6 +577,11 @@ static inline bool htcmp(GLuint x, GLuint y)
 
 template <class T> struct vector
 {
+    void clear( void )
+    {
+        setsize( 0 );
+    }
+
     T const* begin( void ) const
     {
         return buf;
@@ -602,9 +607,24 @@ template <class T> struct vector
         add( el );
     }
 
-    void emplace_back( T el )
+    void emplace_back( void )
+    {
+        add();
+    }
+
+    void emplace_back( T const& el )
     {
         add( el );
+    }
+
+    T const& back( void ) const
+    {
+        return buf[length() - 1];
+    }
+
+    T& back( void )
+    {
+        return buf[length() - 1];
     }
 
     static const int MINSIZE = 8;
