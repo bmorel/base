@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <vector>
 // texture.cpp: texture slot management
 
 #include <algorithm>
@@ -924,26 +926,26 @@ void createcompressedtexture(int tnum, int w, int h, uchar *data, int align, int
 }
 
 hashnameset<Texture> textures;
-vector<Texture *> animtextures;
+std::vector<Texture *> animtextures;
 
 Texture *notexture = NULL, *blanktexture = NULL; // used as default, ensured to be loaded
 
 static void updatetexture(Texture *t)
 {
-    if(t->frames.length() <= 1 || t->delay <= 0) return;
+    if(t->frames.size() <= 1 || t->delay <= 0) return;
     int elapsed = lastmillis-t->last;
     if(elapsed < t->delay) return;
-    int animlen = t->throb ? (t->frames.length()-1)*2 : t->frames.length();
+    int animlen = t->throb ? (t->frames.size()-1)*2 : t->frames.size();
     t->frame += elapsed/t->delay;
     t->frame %= animlen;
     t->last = lastmillis-(lastmillis%t->delay);
-    int frame = t->throb && t->frame >= t->frames.length() ? animlen-t->frame : t->frame;
-    t->id = t->frames.inrange(frame) ? t->frames[frame] : 0;
+    int frame = t->throb && t->frame >= t->frames.size() ? animlen-t->frame : t->frame;
+    t->id = ( 0 <= frame && frame < t->frames.size() ) ? t->frames[frame] : 0;
 }
 
 void updatetextures()
 {
-    loopv(animtextures) updatetexture(animtextures[i]);
+    for( size_t i = 0; i < animtextures.size(); ++i ) updatetexture(animtextures[i]);
 }
 
 void preloadtextures(int flags)
@@ -996,7 +998,7 @@ static Texture *newtexture(Texture *t, const char *rname, ImageData &s, int clam
         char *key = newstring(rname);
         t = &textures[key];
         t->name = key;
-        t->frames.shrink(0);
+        t->frames.clear();
         t->frame = 0;
     }
 
@@ -1043,7 +1045,7 @@ static Texture *newtexture(Texture *t, const char *rname, ImageData &s, int clam
     int filter = !canreduce || reducefilter ? (mipit ? 2 : 1) : 0;
     if(s.compressed)
     {
-        if(t->frames.empty()) t->frames.add(0);
+        if(t->frames.empty()) t->frames.emplace_back( 0 );
         glGenTextures(1, &t->frames[0]);
 
         uchar *data = s.data;
@@ -1073,7 +1075,7 @@ static Texture *newtexture(Texture *t, const char *rname, ImageData &s, int clam
 
         loopi(hasanim ? anim->count : 1)
         {
-            while(!t->frames.inrange(i)) t->frames.add(0);
+            while(!( 0 <= i && i < t->frames.size() )) t->frames.emplace_back( 0 );
             glGenTextures(1, &t->frames[i]);
 
             ImageData cropped;
@@ -1093,8 +1095,8 @@ static Texture *newtexture(Texture *t, const char *rname, ImageData &s, int clam
                 conoutf("\faadding frame: %s (%d) [%d,%d:%d,%d]", t->name, i+1, t->w, t->h, t->xs, t->ys);
         }
     }
-    t->id = t->frames.length() ? t->frames[0] : 0;
-    if(t->frames.length() > 1 && t->delay > 0) animtextures.add(t);
+    t->id = t->frames.size() ? t->frames[0] : 0;
+    if(t->frames.size() > 1 && t->delay > 0) animtextures.emplace_back( t );
     return t;
 }
 
@@ -1532,19 +1534,19 @@ VSlot dummyvslot(&dummyslot);
 void resettextures(int n)
 {
     resetslotshader();
-    int limit = clamp(n, 0, slots.length());
-    for(int i = limit; i < slots.length(); i++)
+    int limit = clamp(n, 0, (int)slots.size());
+    for(int i = limit; i < slots.size(); i++)
     {
         Slot *s = slots[i];
         for(VSlot *vs = s->variants; vs; vs = vs->next) vs->slot = &dummyslot;
         delete s;
     }
-    slots.setsize(limit);
-    while(vslots.length())
+    slots.resize( limit );
+    while(vslots.size())
     {
-        VSlot *vs = vslots.last();
+        VSlot *vs = vslots.back();
         if(vs->slot != &dummyslot || vs->changed) break;
-        delete vslots.pop();
+        vslots.pop_back();
     }
 }
 
@@ -1563,8 +1565,8 @@ static bool markingvslots = false;
 void clearslots()
 {
     resetslotshader();
-    slots.deletecontents();
-    vslots.deletecontents();
+    slots.clear();
+    vslots.clear();
     loopi((MATF_VOLUME|MATF_INDEX)+1) materialslots[i].reset();
     clonedvslots = 0;
 }
@@ -1573,7 +1575,7 @@ static void assignvslot(VSlot &vs);
 
 static inline void assignvslotlayer(VSlot &vs)
 {
-    if(vs.layer && vslots.inrange(vs.layer))
+    if(vs.layer && ( 0 <= vs.layer && vs.layer < vslots.size() ))
     {
         VSlot &layer = *vslots[vs.layer];
         if(layer.index < 0) assignvslot(layer);
@@ -1588,7 +1590,7 @@ static void assignvslot(VSlot &vs)
 
 void compactvslot(int &index)
 {
-    if(vslots.inrange(index))
+    if(( 0 <= index && index < vslots.size() ))
     {
         VSlot &vs = *vslots[index];
         if(vs.index < 0) assignvslot(vs);
@@ -1607,7 +1609,7 @@ void compactvslots(cube *c, int n)
     loopi(n)
     {
         if(c[i].children) compactvslots(c[i].children);
-        else loopj(6) if(vslots.inrange(c[i].texture[j]))
+        else loopj(6) if(( 0 <= c[i].texture[j] && c[i].texture[j] < vslots.size() ))
         {
             VSlot &vs = *vslots[c[i].texture[j]];
             if(vs.index < 0) assignvslot(vs);
@@ -1622,10 +1624,10 @@ int compactvslots(bool cull)
     markingvslots = cull;
     compactedvslots = 0;
     compactvslotsprogress = 0;
-    loopv(vslots) vslots[i]->index = -1;
+    for( size_t i = 0; i < vslots.size(); ++i ) vslots[i]->index = -1;
     if(cull)
     {
-        if(slots.inrange(DEFAULT_SKY))
+        if(( 0 <= DEFAULT_SKY && DEFAULT_SKY < slots.size() ))
         {
             slots[DEFAULT_SKY]->variants->index = compactedvslots++;
             assignvslotlayer(*slots[DEFAULT_SKY]->variants);
@@ -1633,9 +1635,9 @@ int compactvslots(bool cull)
     }
     else
     {
-        loopv(slots) slots[i]->variants->index = compactedvslots++;
-        loopv(slots) assignvslotlayer(*slots[i]->variants);
-        loopv(vslots)
+        for( size_t i = 0; i < slots.size(); ++i ) slots[i]->variants->index = compactedvslots++;
+        for( size_t i = 0; i < slots.size(); ++i ) assignvslotlayer(*slots[i]->variants);
+        for( size_t i = 0; i < vslots.size(); ++i )
         {
             VSlot &vs = *vslots[i];
             if(!vs.changed && vs.index < 0) { markingvslots = true; break; }
@@ -1644,7 +1646,7 @@ int compactvslots(bool cull)
     compactvslots(worldroot);
     int total = compactedvslots;
     compacteditvslots();
-    loopv(vslots)
+    for( size_t i = 0; i < vslots.size(); ++i )
     {
         VSlot *vs = vslots[i];
         if(vs->changed) continue;
@@ -1660,7 +1662,7 @@ int compactvslots(bool cull)
         compactedvslots = 0;
         compactvslotsprogress = 0;
         int lastdiscard = 0;
-        loopv(vslots)
+        for( size_t i = 0; i < vslots.size(); ++i )
         {
             VSlot &vs = *vslots[i];
             if(vs.changed || (vs.index < 0 && !vs.next)) vs.index = -1;
@@ -1679,27 +1681,27 @@ int compactvslots(bool cull)
         compacteditvslots();
     }
     compactmruvslots();
-    loopv(vslots)
+    for( size_t i = 0; i < vslots.size(); ++i )
     {
         VSlot &vs = *vslots[i];
-        if(vs.index >= 0 && vs.layer && vslots.inrange(vs.layer)) vs.layer = vslots[vs.layer]->index;
+        if(vs.index >= 0 && vs.layer && ( 0 <= vs.layer && vs.layer < vslots.size() )) vs.layer = vslots[vs.layer]->index;
     }
     if(cull)
     {
-        loopvrev(slots)
+        for( ssize_t i = slots.size() - 1; i >= 0; --i )
         {
             Slot *s = slots[i];
-            if(s->variants->index < 0) delete slots.remove(i);
+            if(s->variants->index < 0) slots.erase( slots.begin() + i );
         }
-        loopv(slots) slots[i]->index = i;
+        for( size_t i = 0; i < slots.size(); ++i ) slots[i]->index = i;
     }
-    loopv(vslots)
+    for( size_t i = 0; i < vslots.size(); ++i )
     {
         while(vslots[i]->index >= 0 && vslots[i]->index != i)
             swap(vslots[i], vslots[vslots[i]->index]);
     }
-    for(int i = compactedvslots; i < vslots.length(); i++) delete vslots[i];
-    vslots.setsize(compactedvslots);
+    for(int i = compactedvslots; i < vslots.size(); i++) delete vslots[i];
+    vslots.resize( compactedvslots );
     return total;
 }
 
@@ -1715,7 +1717,7 @@ static Slot &loadslot(Slot &s, bool forceload);
 static void clampvslotoffset(VSlot &dst, Slot *slot = NULL)
 {
     if(!slot) slot = dst.slot;
-    if(slot && slot->sts.inrange(0))
+    if(slot && ( 0 <= 0 && 0 < slot->sts.size() ))
     {
         if(!slot->loaded) loadslot(*slot, false);
         Texture *t = slot->sts[0].t;
@@ -1730,7 +1732,7 @@ static void clampvslotoffset(VSlot &dst, Slot *slot = NULL)
 
 static void propagatevslot(VSlot &dst, const VSlot &src, int diff, bool edit = false)
 {
-    if(diff & (1<<VSLOT_SHPARAM)) loopv(src.params) dst.params.add(src.params[i]);
+    if(diff & (1<<VSLOT_SHPARAM)) for( size_t i = 0; i < src.params.size(); ++i ) dst.params.emplace_back( src.params[i] );
     if(diff & (1<<VSLOT_SCALE)) dst.scale = src.scale;
     if(diff & (1<<VSLOT_ROTATION))
     {
@@ -1769,10 +1771,10 @@ static void propagatevslot(VSlot *root, int changed)
 
 static void mergevslot(VSlot &dst, const VSlot &src, int diff, Slot *slot = NULL)
 {
-    if(diff & (1<<VSLOT_SHPARAM)) loopv(src.params)
+    if(diff & (1<<VSLOT_SHPARAM)) for( size_t i = 0; i < src.params.size(); ++i )
     {
         const SlotShaderParam &sp = src.params[i];
-        loopvj(dst.params)
+        for( size_t j = 0; j < dst.params.size(); ++j )
         {
             SlotShaderParam &dp = dst.params[j];
             if(sp.name == dp.name)
@@ -1783,7 +1785,7 @@ static void mergevslot(VSlot &dst, const VSlot &src, int diff, Slot *slot = NULL
                 goto nextparam;
             }
         }
-        dst.params.add(sp);
+        dst.params.emplace_back( sp );
     nextparam:;
     }
     if(diff & (1<<VSLOT_SCALE))
@@ -1838,17 +1840,31 @@ static VSlot *reassignvslot(Slot &owner, VSlot *vs)
 static VSlot *emptyvslot(Slot &owner)
 {
     int offset = 0;
-    loopvrev(slots) if(slots[i]->variants) { offset = slots[i]->variants->index + 1; break; }
-    for(int i = offset; i < vslots.length(); i++) if(!vslots[i]->changed) return reassignvslot(owner, vslots[i]);
-    return vslots.add(new VSlot(&owner, vslots.length()));
+    for( ssize_t i = slots.size() - 1; i >= 0; --i )
+    {
+        if(slots[i]->variants)
+        {
+            offset = slots[i]->variants->index + 1;
+            break;
+        }
+    }
+    for(int i = offset; i < vslots.size(); i++)
+    {
+        if(!vslots[i]->changed)
+        {
+            return reassignvslot(owner, vslots[i]);
+        }
+    }
+    vslots.emplace_back(new VSlot(&owner, vslots.size()));
+    return vslots.back();
 }
 
 static bool comparevslot(const VSlot &dst, const VSlot &src, int diff)
 {
     if(diff & (1<<VSLOT_SHPARAM))
     {
-        if(src.params.length() != dst.params.length()) return false;
-        loopv(src.params)
+        if(src.params.size() != dst.params.size()) return false;
+        for( size_t i = 0; i < src.params.size(); ++i )
         {
             const SlotShaderParam &sp = src.params[i], &dp = dst.params[i];
             if(sp.name != dp.name || sp.palette != dp.palette || sp.palindex != dp.palindex || memcmp(sp.val, dp.val, sizeof(sp.val))) return false;
@@ -1870,10 +1886,10 @@ void packvslot(vector<uchar> &buf, const VSlot &src)
 {
     if(src.changed & (1<<VSLOT_SHPARAM))
     {
-        loopv(src.params)
+        for( size_t i = 0; i < src.params.size(); ++i )
         {
             const SlotShaderParam &p = src.params[i];
-            buf.put(VSLOT_SHPARAM);
+            buf.emplace_back( VSLOT_SHPARAM );
             sendstring(p.name, buf);
             loopj(4) putfloat(buf, p.val[j]);
             putint(buf, p.palette);
@@ -1882,68 +1898,68 @@ void packvslot(vector<uchar> &buf, const VSlot &src)
     }
     if(src.changed & (1<<VSLOT_SCALE))
     {
-        buf.put(VSLOT_SCALE);
+        buf.emplace_back( VSLOT_SCALE );
         putfloat(buf, src.scale);
     }
     if(src.changed & (1<<VSLOT_ROTATION))
     {
-        buf.put(VSLOT_ROTATION);
+        buf.emplace_back( VSLOT_ROTATION );
         putfloat(buf, src.rotation);
     }
     if(src.changed & (1<<VSLOT_OFFSET))
     {
-        buf.put(VSLOT_OFFSET);
+        buf.emplace_back( VSLOT_OFFSET );
         putint(buf, src.offset.x);
         putint(buf, src.offset.y);
     }
     if(src.changed & (1<<VSLOT_SCROLL))
     {
-        buf.put(VSLOT_SCROLL);
+        buf.emplace_back( VSLOT_SCROLL );
         putfloat(buf, src.scroll.x);
         putfloat(buf, src.scroll.y);
     }
     if(src.changed & (1<<VSLOT_LAYER))
     {
-        buf.put(VSLOT_LAYER);
-        putuint(buf, vslots.inrange(src.layer) && !vslots[src.layer]->changed ? src.layer : 0);
+        buf.emplace_back( VSLOT_LAYER );
+        putuint(buf, ( 0 <= src.layer && src.layer < vslots.size() ) && !vslots[src.layer]->changed ? src.layer : 0);
     }
     if(src.changed & (1<<VSLOT_ALPHA))
     {
-        buf.put(VSLOT_ALPHA);
+        buf.emplace_back( VSLOT_ALPHA );
         putfloat(buf, src.alphafront);
         putfloat(buf, src.alphaback);
     }
     if(src.changed & (1<<VSLOT_COLOR))
     {
-        buf.put(VSLOT_COLOR);
+        buf.emplace_back( VSLOT_COLOR );
         putfloat(buf, src.colorscale.r);
         putfloat(buf, src.colorscale.g);
         putfloat(buf, src.colorscale.b);
     }
     if(src.changed & (1<<VSLOT_PALETTE))
     {
-        buf.put(VSLOT_PALETTE);
+        buf.emplace_back( VSLOT_PALETTE );
         putint(buf, src.palette);
         putint(buf, src.palindex);
     }
     if(src.changed & (1<<VSLOT_COAST))
     {
-        buf.put(VSLOT_COAST);
+        buf.emplace_back( VSLOT_COAST );
         putfloat(buf, src.coastscale);
     }
-    buf.put(0xFF);
+    buf.emplace_back( 0xFF );
 }
 
 void packvslot(vector<uchar> &buf, int index)
 {
-    if(vslots.inrange(index)) packvslot(buf, *vslots[index]);
-    else buf.put(0xFF);
+    if(( 0 <= index && index < vslots.size() )) packvslot(buf, *vslots[index]);
+    else buf.emplace_back( 0xFF );
 }
 
 void packvslot(vector<uchar> &buf, const VSlot *vs)
 {
     if(vs) packvslot(buf, *vs);
-    else buf.put(0xFF);
+    else buf.emplace_back( 0xFF );
 }
 
 bool unpackvslot(ucharbuf &buf, VSlot &dst, bool delta)
@@ -1964,7 +1980,7 @@ bool unpackvslot(ucharbuf &buf, VSlot &dst, bool delta)
                 loopi(4) p.val[i] = getfloat(buf);
                 p.palette = getint(buf);
                 p.palindex = getint(buf);
-                if(p.name) dst.params.add(p);
+                if(p.name) dst.params.emplace_back( p );
                 break;
             }
             case VSLOT_SCALE:
@@ -1988,7 +2004,7 @@ bool unpackvslot(ucharbuf &buf, VSlot &dst, bool delta)
             case VSLOT_LAYER:
             {
                 int tex = getuint(buf);
-                dst.layer = vslots.inrange(tex) ? tex : 0;
+                dst.layer = ( 0 <= tex && tex < vslots.size() ) ? tex : 0;
                 break;
             }
             case VSLOT_ALPHA:
@@ -2030,7 +2046,8 @@ VSlot *findvslot(Slot &slot, const VSlot &src, const VSlot &delta)
 
 static VSlot *clonevslot(const VSlot &src, const VSlot &delta)
 {
-    VSlot *dst = vslots.add(new VSlot(src.slot, vslots.length()));
+    vslots.emplace_back(new VSlot(src.slot, vslots.size()));
+    VSlot *dst = vslots.back();
     dst->changed = src.changed | delta.changed;
     propagatevslot(*dst, src, ((1<<VSLOT_NUM)-1) & ~delta.changed);
     propagatevslot(*dst, delta, delta.changed, true);
@@ -2043,11 +2060,11 @@ VSlot *editvslot(const VSlot &src, const VSlot &delta)
 {
     VSlot *exists = findvslot(*src.slot, src, delta);
     if(exists) return exists;
-    if(vslots.length()>=0x10000)
+    if(vslots.size()>=0x10000)
     {
         compactvslots();
         allchanged();
-        if(vslots.length()>=0x10000) return NULL;
+        if(vslots.size()>=0x10000) return NULL;
     }
     if(autocompactvslots && ++clonedvslots >= autocompactvslots)
     {
@@ -2071,7 +2088,7 @@ static void fixinsidefaces(cube *c, const ivec &o, int size, int tex)
 ICOMMAND(0, fixinsidefaces, "i", (int *tex),
 {
     if(noedit(true) || multiplayer()) return;
-    fixinsidefaces(worldroot, ivec(0, 0, 0), hdr.worldsize>>1, *tex && vslots.inrange(*tex) ? *tex : DEFAULT_GEOM);
+    fixinsidefaces(worldroot, ivec(0, 0, 0), hdr.worldsize>>1, *tex && ( 0 <= *tex && *tex < vslots.size() ) ? *tex : DEFAULT_GEOM);
     allchanged();
 });
 
@@ -2101,18 +2118,18 @@ const char *findtexturetypename(int type)
 
 void texture(char *type, char *name, int *rot, int *xoffset, int *yoffset, float *scale)
 {
-    if(slots.length()>=0x10000) return;
+    if(slots.size()>=0x10000) return;
     static int lastmatslot = -1;
     int tnum = findtexturetype(type, true), matslot = findmaterial(type, false);
     if(tnum < 0) tnum = 0;
     if(tnum==TEX_DIFFUSE) lastmatslot = matslot;
     else if(lastmatslot>=0) matslot = lastmatslot;
     else if(slots.empty()) return;
-    Slot &s = matslot>=0 ? materialslots[matslot] : *(tnum!=TEX_DIFFUSE ? slots.last() : slots.add(new Slot(slots.length())));
+    Slot &s = matslot>=0 ? materialslots[matslot] : *(tnum!=TEX_DIFFUSE ? slots.back() : (slots.emplace_back(new Slot(slots.size())),slots.back()));
     s.loaded = false;
     s.texmask |= 1<<tnum;
-    if(s.sts.length() >= TEX_MAX) conoutf("\frwarning: too many textures, [%d] %s (%d,%d)", slots.length()-1, name, matslot, lastmatslot);
-    Slot::Tex &st = s.sts.add();
+    if(s.sts.size() >= TEX_MAX) conoutf("\frwarning: too many textures, [%d] %s (%d,%d)", slots.size()-1, name, matslot, lastmatslot);
+    Slot::Tex &st = (s.sts.emplace_back(  ), s.sts.back());
     st.type = tnum;
     st.combined = -1;
     st.t = NULL;
@@ -2137,13 +2154,13 @@ void texgrass(Slot &s, char *name)
     s.texgrass = name[0] ? newstring(name) : NULL;
     s.grasstex = NULL;
 }
-ICOMMAND(0, autograss, "s", (char *name), if(!slots.empty()) texgrass(*slots.last(), name));
-ICOMMAND(0, texgrass, "s", (char *name), if(!slots.empty()) texgrass(*slots.last(), name));
+ICOMMAND(0, autograss, "s", (char *name), if(!slots.empty()) texgrass(*slots.back(), name));
+ICOMMAND(0, texgrass, "s", (char *name), if(!slots.empty()) texgrass(*slots.back(), name));
 ICOMMAND(0, setgrass, "s", (char *name), {
     if(noedit() || multiplayer() || slots.empty()) return;
     cube &c = lookupcube(sel.o, -sel.grid);
     int tex = !isempty(c) ? c.texture[sel.orient] : texmru[0];
-    if(slots.inrange(tex))
+    if(( 0 <= tex && tex < slots.size() ))
     {
         texgrass(*slots[tex], name);
         allchanged();
@@ -2154,54 +2171,54 @@ void texgrasscolor(Slot &s, float r, float g, float b)
 {
     s.grasscolor = vec(max(r, 0.f), max(g, 0.f), max(b, 0.f));
 }
-ICOMMAND(0, texgrasscolor, "fff", (float *r, float *g, float *b), if(!slots.empty()) texgrasscolor(*slots.last(), *r, *g, *b));
+ICOMMAND(0, texgrasscolor, "fff", (float *r, float *g, float *b), if(!slots.empty()) texgrasscolor(*slots.back(), *r, *g, *b));
 ICOMMAND(0, setgrasscolor, "fff", (float *r, float *g, float *b), {
     if(noedit() || multiplayer() || slots.empty()) return;
     cube &c = lookupcube(sel.o, -sel.grid);
     int tex = !isempty(c) ? c.texture[sel.orient] : texmru[0];
-    if(slots.inrange(tex)) texgrasscolor(*slots[tex], *r, *g, *b);
+    if(( 0 <= tex && tex < slots.size() )) texgrasscolor(*slots[tex], *r, *g, *b);
 });
 
 void texgrassblend(Slot &s, float blend)
 {
     s.grassblend = clamp(blend, 0.f, 1.f);
 }
-ICOMMAND(0, texgrassblend, "f", (float *blend), if(!slots.empty()) texgrassblend(*slots.last(), *blend));
+ICOMMAND(0, texgrassblend, "f", (float *blend), if(!slots.empty()) texgrassblend(*slots.back(), *blend));
 ICOMMAND(0, setgrassblend, "f", (float *blend), {
     if(noedit() || multiplayer() || slots.empty()) return;
     cube &c = lookupcube(sel.o, -sel.grid);
     int tex = !isempty(c) ? c.texture[sel.orient] : texmru[0];
-    if(slots.inrange(tex)) texgrassblend(*slots[tex], *blend);
+    if(( 0 <= tex && tex < slots.size() )) texgrassblend(*slots[tex], *blend);
 });
 
 void texgrassscale(Slot &s, int scale)
 {
     s.grassscale = clamp(scale, 0, 64);
 }
-ICOMMAND(0, texgrassscale, "i", (int *scale), if(!slots.empty()) texgrassscale(*slots.last(), *scale));
+ICOMMAND(0, texgrassscale, "i", (int *scale), if(!slots.empty()) texgrassscale(*slots.back(), *scale));
 ICOMMAND(0, setgrassscale, "i", (int *scale), {
     if(noedit() || multiplayer() || slots.empty()) return;
     cube &c = lookupcube(sel.o, -sel.grid);
     int tex = !isempty(c) ? c.texture[sel.orient] : texmru[0];
-    if(slots.inrange(tex)) texgrassscale(*slots[tex], *scale);
+    if(( 0 <= tex && tex < slots.size() )) texgrassscale(*slots[tex], *scale);
 });
 
 void texgrassheight(Slot &s, int height)
 {
     s.grassheight = clamp(height, 0, 64);
 }
-ICOMMAND(0, texgrassheight, "i", (int *height), if(!slots.empty()) texgrassheight(*slots.last(), *height));
+ICOMMAND(0, texgrassheight, "i", (int *height), if(!slots.empty()) texgrassheight(*slots.back(), *height));
 ICOMMAND(0, setgrassheight, "i", (int *height), {
     if(noedit() || multiplayer() || slots.empty()) return;
     cube &c = lookupcube(sel.o, -sel.grid);
     int tex = !isempty(c) ? c.texture[sel.orient] : texmru[0];
-    if(slots.inrange(tex)) texgrassheight(*slots[tex], *height);
+    if(( 0 <= tex && tex < slots.size() )) texgrassheight(*slots[tex], *height);
 });
 
 void texscroll(float *scrollS, float *scrollT)
 {
     if(slots.empty()) return;
-    Slot &s = *slots.last();
+    Slot &s = *slots.back();
     s.variants->scroll = vec2(*scrollS, *scrollT).div(1000.0f);
     propagatevslot(s.variants, 1<<VSLOT_SCROLL);
 }
@@ -2210,7 +2227,7 @@ COMMAND(0, texscroll, "ff");
 void texoffset_(int *xoffset, int *yoffset)
 {
     if(slots.empty()) return;
-    Slot &s = *slots.last();
+    Slot &s = *slots.back();
     s.variants->offset = ivec2(*xoffset, *yoffset).max(0);
     propagatevslot(s.variants, 1<<VSLOT_OFFSET);
 }
@@ -2219,7 +2236,7 @@ COMMANDN(0, texoffset, texoffset_, "ii");
 void texrotate_(int *rot)
 {
     if(slots.empty()) return;
-    Slot &s = *slots.last();
+    Slot &s = *slots.back();
     s.variants->rotation = clamp(*rot, 0, 5);
     propagatevslot(s.variants, 1<<VSLOT_ROTATION);
 }
@@ -2228,8 +2245,8 @@ COMMANDN(0, texrotate, texrotate_, "i");
 void texlayer(int *layer, char *name, int *mode, float *scale)
 {
     if(slots.empty()) return;
-    Slot &s = *slots.last();
-    s.variants->layer = *layer < 0 ? max(slots.length()-1+*layer, 0) : *layer;
+    Slot &s = *slots.back();
+    s.variants->layer = *layer < 0 ? std::max(slots.size()-1+*layer, 0) : *layer;
     s.layermaskname = name[0] ? newstring(name) : NULL;
     s.layermaskmode = *mode;
     s.layermaskscale = *scale <= 0 ? 1 : *scale;
@@ -2240,7 +2257,7 @@ COMMAND(0, texlayer, "isif");
 void texscale(float *scale)
 {
     if(slots.empty()) return;
-    Slot &s = *slots.last();
+    Slot &s = *slots.back();
     s.variants->scale = *scale <= 0 ? 1 : *scale;
     propagatevslot(s.variants, 1<<VSLOT_SCALE);
 }
@@ -2249,7 +2266,7 @@ COMMAND(0, texscale, "f");
 void texalpha(float *front, float *back)
 {
     if(slots.empty()) return;
-    Slot &s = *slots.last();
+    Slot &s = *slots.back();
     s.variants->alphafront = clamp(*front, 0.0f, 1.0f);
     s.variants->alphaback = clamp(*back, 0.0f, 1.0f);
     propagatevslot(s.variants, 1<<VSLOT_ALPHA);
@@ -2259,7 +2276,7 @@ COMMAND(0, texalpha, "ff");
 void texcolor(float *r, float *g, float *b)
 {
     if(slots.empty()) return;
-    Slot &s = *slots.last();
+    Slot &s = *slots.back();
     s.variants->colorscale = vec(max(*r, 0.f), max(*g, 0.f), max(*b, 0.f));
     propagatevslot(s.variants, 1<<VSLOT_COLOR);
 }
@@ -2268,7 +2285,7 @@ COMMAND(0, texcolor, "fff");
 void texcoastscale(float *value)
 {
     if(slots.empty()) return;
-    Slot &s = *slots.last();
+    Slot &s = *slots.back();
     s.variants->coastscale = clamp(*value, 0.f, 1000.f);
     propagatevslot(s.variants, 1<<VSLOT_COAST);
 }
@@ -2277,7 +2294,7 @@ COMMAND(0, texcoastscale, "f");
 void texpalette(int *p, int *x)
 {
     if(slots.empty()) return;
-    Slot &s = *slots.last();
+    Slot &s = *slots.back();
     s.variants->palette = max(*p, 0);
     s.variants->palindex = max(*x, 0);
     propagatevslot(s.variants, 1<<VSLOT_PALETTE);
@@ -2286,7 +2303,7 @@ COMMAND(0, texpalette, "i");
 
 static int findtextype(Slot &s, int type, int last = -1)
 {
-    for(int i = last+1; i<s.sts.length(); i++) if((type&(1<<s.sts[i].type)) && s.sts[i].combined<0) return i;
+    for(int i = last+1; i<s.sts.size(); i++) if((type&(1<<s.sts[i].type)) && s.sts[i].combined<0) return i;
     return -1;
 }
 
@@ -2329,16 +2346,16 @@ static void mergedepth(ImageData &c, ImageData &z)
     );
 }
 
-static void addname(vector<char> &key, Slot &slot, Slot::Tex &t, bool combined = false, const char *prefix = NULL)
+static void addname(std::vector<char> &key, Slot &slot, Slot::Tex &t, bool combined = false, const char *prefix = NULL)
 {
-    if(combined) key.add('&');
-    if(prefix) { while(*prefix) key.add(*prefix++); }
-    for(const char *s = t.name; *s; key.add(*s++));
+    if(combined) key.emplace_back( '&' );
+    if(prefix) { while(*prefix) key.emplace_back( *prefix++ ); }
+    for(const char *s = t.name; *s; key.emplace_back( *s++ ));
 }
 
 static void texcombine(Slot &s, int index, Slot::Tex &t, bool forceload = false)
 {
-    vector<char> key;
+    std::vector<char> key;
     addname(key, s, t);
     int texmask = 0;
     if(!forceload) switch(t.type)
@@ -2354,8 +2371,8 @@ static void texcombine(Slot &s, int index, Slot::Tex &t, bool forceload = false)
             break;
         }
     }
-    key.add('\0');
-    t.t = textures.access(key.getbuf());
+    key.emplace_back( '\0' );
+    t.t = textures.access(key.data());
     if(t.t) return;
 
     ImageData ts;
@@ -2366,7 +2383,7 @@ static void texcombine(Slot &s, int index, Slot::Tex &t, bool forceload = false)
     {
         case TEX_DIFFUSE:
         case TEX_NORMAL:
-            loopv(s.sts)
+            for( size_t i = 0; i < s.sts.size(); ++i )
             {
                 Slot::Tex &a = s.sts[i];
                 if(a.combined!=index) continue;
@@ -2383,13 +2400,13 @@ static void texcombine(Slot &s, int index, Slot::Tex &t, bool forceload = false)
             }
             break;
     }
-    t.t = newtexture(NULL, key.getbuf(), ts, wrap, true, true, true, compress, &anim);
+    t.t = newtexture(NULL, key.data(), ts, wrap, true, true, true, compress, &anim);
 }
 
 static Slot &loadslot(Slot &s, bool forceload)
 {
     linkslotshader(s);
-    loopv(s.sts)
+    for( size_t i = 0; i < s.sts.size(); ++i )
     {
         Slot::Tex &t = s.sts[i];
         if(t.combined >= 0) continue;
@@ -2422,13 +2439,13 @@ MSlot &lookupmaterialslot(int index, bool load)
 
 Slot &lookupslot(int index, bool load)
 {
-    Slot &s = slots.inrange(index) ? *slots[index] : (slots.inrange(DEFAULT_GEOM) ? *slots[DEFAULT_GEOM] : dummyslot);
+    Slot &s = ( 0 <= index && index < slots.size() ) ? *slots[index] : (( 0 <= DEFAULT_GEOM && DEFAULT_GEOM < slots.size() ) ? *slots[DEFAULT_GEOM] : dummyslot);
     return s.loaded || !load ? s : loadslot(s, false);
 }
 
 VSlot &lookupvslot(int index, bool load)
 {
-    VSlot &s = vslots.inrange(index) && vslots[index]->slot ? *vslots[index] : (slots.inrange(DEFAULT_GEOM) && slots[DEFAULT_GEOM]->variants ? *slots[DEFAULT_GEOM]->variants : dummyvslot);
+    VSlot &s = ( 0 <= index && index < vslots.size() ) && vslots[index]->slot ? *vslots[index] : (( 0 <= DEFAULT_GEOM && DEFAULT_GEOM < slots.size() ) && slots[DEFAULT_GEOM]->variants ? *slots[DEFAULT_GEOM]->variants : dummyvslot);
     if(load && !s.linked)
     {
         if(!s.slot->loaded) loadslot(*s.slot, false);
@@ -2440,8 +2457,8 @@ VSlot &lookupvslot(int index, bool load)
 
 void linkslotshaders()
 {
-    loopv(slots) if(slots[i]->loaded) linkslotshader(*slots[i]);
-    loopv(vslots) if(vslots[i]->linked) linkvslotshader(*vslots[i]);
+    for( size_t i = 0; i < slots.size(); ++i ) if(slots[i]->loaded) linkslotshader(*slots[i]);
+    for( size_t i = 0; i < vslots.size(); ++i ) if(vslots[i]->linked) linkvslotshader(*vslots[i]);
     loopi((MATF_VOLUME|MATF_INDEX)+1) if(materialslots[i].loaded)
     {
         linkslotshader(materialslots[i]);
@@ -2460,7 +2477,7 @@ Texture *loadthumbnail(Slot &slot)
     VSlot &vslot = *slot.variants;
     linkslotshader(slot, false);
     linkvslotshader(vslot, false);
-    vector<char> name;
+    std::vector<char> name;
     vec colorscale = vslot.getcolorscale();
     if(colorscale == vec(1, 1, 1)) addname(name, slot, slot.sts[0], false, "<thumbnail>");
     else
@@ -2472,7 +2489,7 @@ Texture *loadthumbnail(Slot &slot)
     vec glowcolor(1, 1, 1);
     if(slot.texmask&(1<<TEX_GLOW))
     {
-        loopvj(slot.sts) if(slot.sts[j].type==TEX_GLOW) { glow = j; break; }
+        for( size_t j = 0; j < slot.sts.size(); ++j ) if(slot.sts[j].type==TEX_GLOW) { glow = j; break; }
         if(glow >= 0)
         {
             glowcolor = vslot.getglowcolor();
@@ -2491,8 +2508,8 @@ Texture *loadthumbnail(Slot &slot)
             addname(name, *layer->slot, layer->slot->sts[0], true, prefix);
         }
     }
-    name.add('\0');
-    Texture *t = textures.access(path(name.getbuf()));
+    name.emplace_back( '\0' );
+    Texture *t = textures.access(path(name.data()));
     if(t) slot.thumbnail = t;
     else
     {
@@ -2528,7 +2545,7 @@ Texture *loadthumbnail(Slot &slot)
                 }
             }
             if(s.bpp < 3) forcergbimage(s);
-            t = newtexture(NULL, name.getbuf(), s, 0, false, false, true);
+            t = newtexture(NULL, name.data(), s, 0, false, false, true);
             t->xs = xs;
             t->ys = ys;
             slot.thumbnail = t;
@@ -2539,7 +2556,7 @@ Texture *loadthumbnail(Slot &slot)
 
 void loadlayermasks()
 {
-    loopv(slots)
+    for( size_t i = 0; i < slots.size(); ++i )
     {
         Slot &slot = *slots[i];
         if(slot.loaded && slot.layermaskname && !slot.layermask)
@@ -2674,7 +2691,7 @@ Texture *cubemaploadwildcard(Texture *t, const char *name, bool mipit, bool msg,
             case GL_RGB: component = GL_RGB5; break;
         }
     }
-    if(t->frames.empty()) t->frames.add(0);
+    if(t->frames.empty()) t->frames.emplace_back( 0 );
     glGenTextures(1, &t->frames[0]);
     loopi(6)
     {
@@ -2699,7 +2716,7 @@ Texture *cubemaploadwildcard(Texture *t, const char *name, bool mipit, bool msg,
             createtexture(!i ? t->frames[0] : 0, t->w, t->h, s.data, 3, mipit ? 2 : 1, component, side.target, s.w, s.h, s.pitch, false, format, true);
         }
     }
-    t->id = t->frames.length() ? t->frames[0] : 0;
+    t->id = t->frames.size() ? t->frames[0] : 0;
     forcecubemapload(t->frames[0]);
     return t;
 }
@@ -2726,7 +2743,7 @@ struct envmap
     GLuint tex;
 };
 
-static vector<envmap> envmaps;
+static std::vector<envmap> envmaps;
 static Texture *skyenvmap = NULL;
 
 void clearenvmaps()
@@ -2736,8 +2753,8 @@ void clearenvmaps()
         if(skyenvmap->type&Texture::TRANSIENT) cleanuptexture(skyenvmap);
         skyenvmap = NULL;
     }
-    loopv(envmaps) glDeleteTextures(1, &envmaps[i].tex);
-    envmaps.shrink(0);
+    for( size_t i = 0; i < envmaps.size(); ++i ) glDeleteTextures(1, &envmaps[i].tex);
+    envmaps.clear();
 }
 
 VAR(0, aaenvmap, 0, 2, 4);
@@ -2801,12 +2818,12 @@ void initenvmaps()
     clearenvmaps();
     extern char *skybox;
     skyenvmap = skybox[0] ? cubemapload(skybox, true, false, true) : NULL;
-    const vector<extentity *> &ents = entities::getents();
-    loopv(ents)
+    auto const &ents = entities::getents();
+    for( size_t i = 0; i < ents.size(); ++i )
     {
         const extentity &ent = *ents[i];
         if(ent.type != ET_ENVMAP) continue;
-        envmap &em = envmaps.add();
+        envmap &em = (envmaps.emplace_back(  ), envmaps.back());
         em.radius = ent.attrs[0] ? clamp(int(ent.attrs[0]), 0, 10000) : envmapradius;
         em.size = ent.attrs[1] ? clamp(int(ent.attrs[1]), 4, 9) : 0;
         em.blur = ent.attrs[2] ? clamp(int(ent.attrs[2]), 1, 2) : 0;
@@ -2820,7 +2837,7 @@ void genenvmaps()
     if(envmaps.empty()) return;
     progress(0, "generating environment maps...");
     int lastprogress = SDL_GetTicks();
-    loopv(envmaps)
+    for( size_t i = 0; i < envmaps.size(); ++i )
     {
         envmap &em = envmaps[i];
         em.tex = genenvmap(em.o, em.size ? min(em.size, envmapsize) : envmapsize, em.blur);
@@ -2828,7 +2845,7 @@ void genenvmaps()
         int millis = SDL_GetTicks();
         if(millis - lastprogress >= 250)
         {
-            progress(float(i+1)/envmaps.length(), "generating environment maps...");
+            progress(float(i+1)/envmaps.size(), "generating environment maps...");
             lastprogress = millis;
         }
     }
@@ -2838,7 +2855,7 @@ ushort closestenvmap(const vec &o)
 {
     ushort minemid = EMID_SKY;
     float mindist = 1e16f;
-    loopv(envmaps)
+    for( size_t i = 0; i < envmaps.size(); ++i )
     {
         envmap &em = envmaps[i];
         float dist = em.o.dist(o);
@@ -2863,25 +2880,32 @@ ushort closestenvmap(int orient, const ivec &co, int size)
 
 GLuint lookupenvmap(Slot &slot)
 {
-    loopv(slot.sts) if(slot.sts[i].type==TEX_ENVMAP && slot.sts[i].t) return slot.sts[i].t->id;
+    for( size_t i = 0; i < slot.sts.size(); ++i ) if(slot.sts[i].type==TEX_ENVMAP && slot.sts[i].t) return slot.sts[i].t->id;
     return skyenvmap ? skyenvmap->id : 0;
 }
 
 GLuint lookupenvmap(ushort emid)
 {
     if(emid==EMID_SKY || emid==EMID_CUSTOM) return skyenvmap ? skyenvmap->id : 0;
-    if(emid==EMID_NONE || !envmaps.inrange(emid-EMID_RESERVED)) return 0;
+    if(emid==EMID_NONE || !( 0 <= emid-EMID_RESERVED && emid-EMID_RESERVED < envmaps.size() )) return 0;
     GLuint tex = envmaps[emid-EMID_RESERVED].tex;
     return tex ? tex : (skyenvmap ? skyenvmap->id : 0);
 }
 
 void cleanuptexture(Texture *t)
 {
-    if(t->frames.length() > 1 && t->delay > 0) animtextures.removeobj(t);
+    if(t->frames.size() > 1 && t->delay > 0)
+    {
+        auto it = std::find( animtextures.begin(), animtextures.end(), t );
+        if( animtextures.end() != it )
+        {
+            animtextures.erase( it );
+        }
+    }
 
     DELETEA(t->alphamask);
 
-    loopvk(t->frames) if(t->frames[k])
+    for( size_t k = 0; k < t->frames.size(); ++k ) if(t->frames[k])
     {
         if(t->frames[k])
         {
@@ -2890,7 +2914,7 @@ void cleanuptexture(Texture *t)
             t->frames[k] = 0;
         }
     }
-    t->frames.shrink(0);
+    t->frames.clear();
     t->id = 0;
 
     if(t->type&Texture::TRANSIENT) textures.remove(t->name);
@@ -2899,10 +2923,10 @@ void cleanuptexture(Texture *t)
 void cleanuptextures()
 {
     clearenvmaps();
-    loopv(slots) slots[i]->cleanup();
-    loopv(vslots) vslots[i]->cleanup();
+    for( size_t i = 0; i < slots.size(); ++i ) slots[i]->cleanup();
+    for( size_t i = 0; i < vslots.size(); ++i ) vslots[i]->cleanup();
     loopi((MATF_VOLUME|MATF_INDEX)+1) materialslots[i].cleanup();
-    vector<Texture *> transient;
+    std::vector<Texture *> transient;
     enumerate(textures, Texture, tex, cleanuptexture(&tex));
 }
 
@@ -2918,7 +2942,7 @@ bool reloadtexture(const char *name)
 
 bool reloadtexture(Texture *t)
 {
-    loopv(t->frames) if(t->frames[i]) return true;
+    for( size_t i = 0; i < t->frames.size(); ++i ) if(t->frames[i]) return true;
     switch(t->type&Texture::TYPE)
     {
         case Texture::IMAGE:
@@ -2944,10 +2968,10 @@ void reloadtex(char *name)
     if(t->type&Texture::TRANSIENT) { conoutf("\frcan't reload transient texture %s", name); return; }
     DELETEA(t->alphamask);
     Texture oldtex = *t;
-    t->frames.shrink(0);
+    t->frames.clear();
     if(!reloadtexture(t))
     {
-        loopv(t->frames) if(t->frames[i]) glDeleteTextures(1, &t->frames[i]);
+        for( size_t i = 0; i < t->frames.size(); ++i ) if(t->frames[i]) glDeleteTextures(1, &t->frames[i]);
         *t = oldtex;
         conoutf("\frfailed to reload texture %s", name);
     }
