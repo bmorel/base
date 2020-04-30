@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <vector>
 #include "game.h"
 namespace hud
 {
@@ -12,7 +14,7 @@ namespace hud
         int clientnum, outtime, damage, colour; vec dir;
         dhloc(int a, int t, int d, const vec &p, int c) : clientnum(a), outtime(t), damage(d), colour(c), dir(p) {}
     };
-    vector<dhloc> damagelocs, hitlocs;
+    std::vector<dhloc> damagelocs, hitlocs;
     VAR(IDF_PERSIST, damageresiduefade, 0, 500, VAR_MAX);
 
     ICOMMAND(0, conout, "is", (int *n, char *s), conoutft(clamp(*n, 0, CON_MAX-1), "%s", s));
@@ -662,10 +664,10 @@ namespace hud
         } \
     }
 
-    void modetexs(int g, int m, bool before, bool implied, vector<char> &list)
+    void modetexs(int g, int m, bool before, bool implied, std::vector<char> &list)
     {
         modecheck(g, m);
-        #define ADDMODE(s) { list.put(s, strlen(s)); list.add(' '); }
+        #define ADDMODE(s) { list.insert( list.end(), s, s + strlen( s ) ); list.emplace_back( ' ' );}
         if(before) ADDMODEICON(g, m)
         if(m_multi(g, m) && (implied || !(gametype[g].implied&(1<<G_M_MULTI)))) ADDMODE(modemultitex)
         if(m_ffa(g, m) && (implied || !(gametype[g].implied&(1<<G_M_FFA)))) ADDMODE(modeffatex)
@@ -688,10 +690,10 @@ namespace hud
 
     ICOMMAND(0, modetexlist, "iiii", (int *g, int *m, int *b, int *p),
     {
-        vector<char> list;
+        std::vector<char> list;
         modetexs(*g, *m, *b!=0, *p!=0, list);
-        list.add('\0');
-        result(list.getbuf());
+        list.emplace_back( '\0' );
+        result(list.data());
     });
 
     bool needminimap() { return true; }
@@ -772,7 +774,7 @@ namespace hud
         else if(wr_bleeds(weap, flags)) colour = radardamagebleedcolour;
         else if(wr_shocks(weap, flags)) colour = radardamageshockcolour;
         vec dir = vec(loc).sub(camera1->o).normalize();
-        loopv(damagelocs)
+        for( size_t i = 0; i < damagelocs.size(); ++i )
         {
             dhloc &d = damagelocs[i];
             if(v->clientnum != d.clientnum) continue;
@@ -782,7 +784,7 @@ namespace hud
             d.dir = dir;
             return; // accumulate
         }
-        damagelocs.add(dhloc(v->clientnum, lastmillis, n, loc, colour));
+        damagelocs.push_back(dhloc(v->clientnum, lastmillis, n, loc, colour));
     }
 
     void hit(int n, const vec &loc, gameent *v, int weap, int flags)
@@ -793,7 +795,7 @@ namespace hud
         else if(wr_burns(weap, flags)) colour = radarhitsburncolour;
         else if(wr_bleeds(weap, flags)) colour = radarhitsbleedcolour;
         else if(wr_shocks(weap, flags)) colour = radarhitsshockcolour;
-        loopv(hitlocs)
+        for( size_t i = 0; i < hitlocs.size(); ++i )
         {
             dhloc &d = hitlocs[i];
             if(v->clientnum != d.clientnum) continue;
@@ -803,7 +805,7 @@ namespace hud
             d.dir = v->center();
             return; // accumulate
         }
-        hitlocs.add(dhloc(v->clientnum, lastmillis, n, v->center(), colour));
+        hitlocs.push_back(dhloc(v->clientnum, lastmillis, n, v->center(), colour));
     }
 
     void drawquad(float x, float y, float w, float h, float tx1, float ty1, float tx2, float ty2, bool flipx, bool flipy)
@@ -1022,7 +1024,7 @@ namespace hud
                     case 2: vecfromyaw(rot, -1, -1, norm);  tc = vec2(0, 0); break;
                     case 3: vecfromyaw(rot, -1, 1, norm);   tc = vec2(1, 0); break;
                 }
-                norm.mul(size*0.5f).add(loc);
+                norm.mul(size*0.5f).add( loc );
                 gle::attrib(norm);
                 if(flipx) tc.x = 1 - tc.x;
                 if(flipy) tc.y = 1 - tc.y;
@@ -1258,11 +1260,11 @@ namespace hud
                 case 0:
                 {
                     float total = 0;
-                    loopv(damagelocs)
+                    for( size_t i = 0; i < damagelocs.size(); ++i )
                     {
                         dhloc &d = damagelocs[i];
                         int millis = lastmillis-d.outtime, delay = min(20, d.damage)*50;
-                        if(millis >= delay || d.dir.iszero()) { if(millis >= radardamagetime+radardamagefade) damagelocs.remove(i--); continue; }
+                        if(millis >= delay || d.dir.iszero()) { if(millis >= radardamagetime+radardamagefade) damagelocs.erase( damagelocs.begin() + i-- ); continue; }
                         gameent *e = game::getclient(d.clientnum);
                         if(!radardamageself && e == game::focus) continue;
                         float dam = d.damage/float(m_health(game::gamemode, game::mutators, game::focus->actortype)),
@@ -1401,10 +1403,10 @@ namespace hud
     int numteamkills()
     {
         int numkilled = 0;
-        loopvrev(teamkills)
+        for( ssize_t i = teamkills.size() - 1; i >= 0; --i )
         {
             if(totalmillis-teamkills[i] <= teamkilltime*60000) numkilled++;
-            else teamkills.remove(i);
+            else teamkills.erase( teamkills.begin() + i );
         }
         return numkilled;
     }
@@ -1570,33 +1572,33 @@ namespace hud
                 {
                     pushfont("emphasis");
                     static vector<actitem> actitems;
-                    actitems.setsize(0);
+                    actitems.clear();
                     vec pos = target->center();
                     float radius = max(target->height*0.5f, max(target->xradius, target->yradius));
                     if(entities::collateitems(target, pos, radius, actitems))
                     {
                         while(!actitems.empty())
                         {
-                            actitem &t = actitems.last();
+                            actitem &t = actitems.back();
                             int ent = -1;
                             switch(t.type)
                             {
                                 case actitem::ENT:
                                 {
-                                    if(!entities::ents.inrange(t.target)) break;
+                                    if(!( 0 <= t.target && t.target < entities::ents.size() )) break;
                                     ent = t.target;
                                     break;
                                 }
                                 case actitem::PROJ:
                                 {
-                                    if(!projs::projs.inrange(t.target)) break;
+                                    if(!( 0 <= t.target && t.target < projs::projs.size() )) break;
                                     projent &proj = *projs::projs[t.target];
                                     ent = proj.id;
                                     break;
                                 }
                                 default: break;
                             }
-                            if(entities::ents.inrange(ent))
+                            if(( 0 <= ent && ent < entities::ents.size() ))
                             {
                                 extentity &e = *entities::ents[ent];
                                 if(enttype[e.type].usetype == EU_ITEM && e.type == WEAPON)
@@ -1624,7 +1626,7 @@ namespace hud
                                     break;
                                 }
                             }
-                            actitems.pop();
+                            actitems.pop_back();
                         }
                     }
                     popfont();
@@ -1696,7 +1698,7 @@ namespace hud
         if(m_capture(game::gamemode)) capture::drawevents(hudwidth, hudheight, tx, ty, tr, tg, tb, tf/255.f);
         else if(m_defend(game::gamemode)) defend::drawevents(hudwidth, hudheight, tx, ty, tr, tg, tb, tf/255.f);
         else if(m_bomber(game::gamemode)) bomber::drawevents(hudwidth, hudheight, tx, ty, tr, tg, tb, tf/255.f);
-        if(showeventicons && game::focus->state != CS_EDITING && game::focus->state != CS_SPECTATOR) loopv(game::focus->icons)
+        if(showeventicons && game::focus->state != CS_EDITING && game::focus->state != CS_SPECTATOR) for( size_t i = 0; i < game::focus->icons.size(); ++i )
         {
             if(game::focus->icons[i].type == eventicon::AFFINITY && !(showeventicons&2)) continue;
             if(game::focus->icons[i].type == eventicon::WEAPON && !(showeventicons&4)) continue;
@@ -1754,7 +1756,7 @@ namespace hud
 
     void drawconsole(int type, int w, int h, int x, int y, int s, float fade)
     {
-        static vector<int> refs; refs.setsize(0);
+        static std::vector<int> refs; refs.clear();
         bool full = fullconsole || commandmillis > 0;
         int tz = 0;
         pushfont("console");
@@ -1766,15 +1768,15 @@ namespace hud
                 int len = !full && conlines[j].type > CON_CHAT ? chatcontime/2 : chatcontime;
                 if(full || totalmillis-conlines[j].reftime <= len+chatconfade)
                 {
-                    if(refs.length() >= numl)
+                    if(refs.size() >= numl)
                     {
-                        if(refs.length() >= numo)
+                        if(refs.size() >= numo)
                         {
                             if(full) break;
                             bool found = false;
-                            loopvrev(refs) if(conlines[refs[i]].reftime+(conlines[refs[i]].type > CON_CHAT ? chatcontime/2 : chatcontime) < conlines[j].reftime+len)
+                            for( ssize_t i = refs.size() - 1; i >= 0; --i ) if(conlines[refs[i]].reftime+(conlines[refs[i]].type > CON_CHAT ? chatcontime/2 : chatcontime) < conlines[j].reftime+len)
                             {
-                                refs.remove(i);
+                                refs.erase( refs.begin() + i );
                                 found = true;
                                 break;
                             }
@@ -1782,14 +1784,14 @@ namespace hud
                         }
                         conlines[j].reftime = min(conlines[j].reftime, totalmillis-len);
                     }
-                    refs.add(j);
+                    refs.emplace_back( j );
                 }
             }
             pushhudscale(chatconscale);
             int tx = int(x/chatconscale), ty = int(y/chatconscale),
                 ts = int(s/chatconscale), tr = tx+FONTW;
             tz = int(tz/chatconscale);
-            loopvj(refs)
+            for( size_t j = 0; j < refs.size(); ++j )
             {
                 int len = !full && conlines[refs[j]].type > CON_CHAT ? chatcontime/2 : chatcontime;
                 float f = full || !chatconfade ? 1.f : clamp(((len+chatconfade)-(totalmillis-conlines[refs[j]].reftime))/float(chatconfade), 0.f, 1.f),
@@ -1812,18 +1814,18 @@ namespace hud
                         fadelen = conlines[j].type >= CON_CHAT ? chatconfade : confade;
                     if(conskip ? j>=conskip-1 || j>=conlines.length()-numl : full || totalmillis-conlines[j].reftime <= len+fadelen)
                     {
-                        if(refs.length() >= numl)
+                        if(refs.size() >= numl)
                         {
-                            if(refs.length() >= numo)
+                            if(refs.size() >= numo)
                             {
                                 if(full) break;
                                 bool found = false;
-                                loopvrev(refs)
+                                for( ssize_t i = refs.size() - 1; i >= 0; --i )
                                 {
                                     int check = conlines[refs[i]].type >= CON_CHAT ? (!full && conlines[refs[i]].type > CON_CHAT ? chatcontime/2 : chatcontime) : (!full && conlines[refs[i]].type < CON_IMPORTANT ? contime/2 : contime);
                                     if(conlines[refs[i]].reftime+check < conlines[j].reftime+len)
                                     {
-                                        refs.remove(i);
+                                        refs.erase( refs.begin() + i );
                                         found = true;
                                         break;
                                     }
@@ -1832,14 +1834,14 @@ namespace hud
                             }
                             conlines[j].reftime = min(conlines[j].reftime, totalmillis-len);
                         }
-                        refs.add(j);
+                        refs.emplace_back( j );
                     }
                 }
                 pushhudscale(conscale);
                 int tx = int(x/conscale), ty = int(y/conscale),
                     ts = int(s/conscale), tr = concenter ? tx+ts/2 : tx;
                 tz = int(tz/conscale);
-                loopvrev(refs)
+                for( ssize_t i = refs.size() - 1; i >= 0; --i )
                 {
                     int len = !full && conlines[refs[i]].type < CON_IMPORTANT ? contime/2 : contime;
                     float f = full || !confade ? 1.f : clamp(((len+confade)-(totalmillis-conlines[refs[i]].reftime))/float(confade), 0.f, 1.f),
@@ -1953,13 +1955,13 @@ namespace hud
                                 }
 
                                 string fields = "";
-                                if(id->type == ID_VAR && id->fields.length() > 1)
+                                if(id->type == ID_VAR && id->fields.size() > 1)
                                 {
                                     concatstring(fields, "<bitfield>");
-                                    loopvj(id->fields) if(id->fields[j])
+                                    for( size_t j = 0; j < id->fields.size(); ++j ) if(id->fields[j])
                                         concformatstring(fields, "\n%d [0x%x] = %s", 1<<j, 1<<j, id->fields[j]);
                                 }
-                                else loopvj(id->fields) if(id->fields[j])
+                                else for( size_t j = 0; j < id->fields.size(); ++j ) if(id->fields[j])
                                     concformatstring(fields, "%s<%s>", j ? " " : "", id->fields[j]);
                                 if(!*fields) switch(id->type)
                                 {
@@ -2144,7 +2146,7 @@ namespace hud
         if(d == game::focus && !self) return;
         vec dir = vec(d->o).sub(camera1->o);
         float dist = dir.magnitude();
-        bool isdominated = radarplayereffects && (!m_team(game::gamemode, game::mutators) || d->team != game::focus->team) && d->dominated.find(game::focus) >= 0,
+        bool isdominated = radarplayereffects && (!m_team(game::gamemode, game::mutators) || d->team != game::focus->team) && find( d->dominated, game::focus ) >= 0,
             dominated = radarplayerdominated && isdominated;
         if(!force && !killer && !self && !dominated) switch(radarplayerfilter)
         {
@@ -2276,13 +2278,13 @@ namespace hud
     {
         if(m_edit(game::gamemode) && game::focus->state == CS_EDITING)
         {
-            int hover = !entities::ents.inrange(enthover) && !entgroup.empty() ? entgroup[0] : -1;
-            loopv(entgroup) if(entities::ents.inrange(entgroup[i]) && entgroup[i] != hover)
+            int hover = !( 0 <= enthover && enthover < entities::ents.size() ) && !entgroup.empty() ? entgroup[0] : -1;
+            for( size_t i = 0; i < entgroup.size(); ++i ) if(( 0 <= entgroup[i] && entgroup[i] < entities::ents.size() ) && entgroup[i] != hover)
             {
                 gameentity &e = *(gameentity *)entities::ents[entgroup[i]];
                 drawentblip(w, h, blend, entgroup[i], e.o, e.type, e.attrs, e.spawned(), e.lastspawn, true);
             }
-            if(entities::ents.inrange(hover))
+            if(( 0 <= hover && hover < entities::ents.size() ))
             {
                 gameentity &e = *(gameentity *)entities::ents[hover];
                 drawentblip(w, h, blend, hover, e.o, e.type, e.attrs, e.spawned(), e.lastspawn, true);
@@ -2295,10 +2297,10 @@ namespace hud
                 gameentity &e = *(gameentity *)entities::ents[i];
                 drawentblip(w, h, blend, i, e.o, e.type, e.attrs, e.spawned(), e.lastspawn, false);
             }
-            loopv(projs::projs) if(projs::projs[i]->projtype == PRJ_ENT && projs::projs[i]->ready())
+            for( size_t i = 0; i < projs::projs.size(); ++i ) if(projs::projs[i]->projtype == PRJ_ENT && projs::projs[i]->ready())
             {
                 projent &proj = *projs::projs[i];
-                if(entities::ents.inrange(proj.id))
+                if(( 0 <= proj.id && proj.id < entities::ents.size() ))
                     drawentblip(w, h, blend, -1, proj.o, entities::ents[proj.id]->type, entities::ents[proj.id]->attrs, true, proj.spawntime, false);
             }
         }
@@ -2306,11 +2308,11 @@ namespace hud
 
     void drawdamageblips(int w, int h, float blend)
     {
-        loopv(damagelocs)
+        for( size_t i = 0; i < damagelocs.size(); ++i )
         {
             dhloc &d = damagelocs[i];
             int millis = lastmillis-d.outtime;
-            if(millis >= radardamagetime+radardamagefade || d.dir.iszero()) { if(millis >= min(20, d.damage)*50) damagelocs.remove(i--); continue; }
+            if(millis >= radardamagetime+radardamagefade || d.dir.iszero()) { if(millis >= min(20, d.damage)*50) damagelocs.erase( damagelocs.begin() + i-- ); continue; }
             if(game::focus->state == CS_SPECTATOR || game::focus->state == CS_EDITING) continue;
             gameent *e = game::getclient(d.clientnum);
             if(!radardamageself && e == game::focus) continue;
@@ -2331,11 +2333,11 @@ namespace hud
         pushfont("tiny");
         pushhudscale(radarhitsscale);
         float maxy = -1.f;
-        loopv(hitlocs)
+        for( size_t i = 0; i < hitlocs.size(); ++i )
         {
             dhloc &d = hitlocs[i];
             int millis = lastmillis-d.outtime;
-            if(millis >= radarhitstime+radarhitsfade || d.dir.iszero()) { hitlocs.remove(i--); continue; }
+            if(millis >= radarhitstime+radarhitsfade || d.dir.iszero()) { hitlocs.erase( hitlocs.begin() + i-- ); continue; }
             if(game::focus->state == CS_SPECTATOR || game::focus->state == CS_EDITING) continue;
             gameent *a = game::getclient(d.clientnum);
             if((!radarhitsheal && d.damage < 0) || (!radarhitsself && a == game::focus)) continue;
@@ -2770,7 +2772,7 @@ namespace hud
 
     int drawentitem(int n, int x, int y, int s, float skew, float fade)
     {
-        if(entities::ents.inrange(n))
+        if(( 0 <= n && n < entities::ents.size() ))
         {
             gameentity &e = *(gameentity *)entities::ents[n];
             string attrstr; attrstr[0] = '\0';
@@ -2846,10 +2848,10 @@ namespace hud
         }
         else if(game::focus->state == CS_EDITING && inventoryedit)
         {
-            int hover = entities::ents.inrange(enthover) ? enthover : (!entgroup.empty() ? entgroup[0] : -1);
+            int hover = ( 0 <= enthover && enthover < entities::ents.size() ) ? enthover : (!entgroup.empty() ? entgroup[0] : -1);
             sy += FONTH*4;
             if(y-sy-s >= m) sy += drawentitem(hover, x, y-sy, s, 1.f, blend*inventoryeditblend);
-            loopv(entgroup) if(entgroup[i] != hover)
+            for( size_t i = 0; i < entgroup.size(); ++i ) if(entgroup[i] != hover)
             {
                 if(y-sy-s < m) break;
                 sy += drawentitem(entgroup[i], x, y-sy, s, inventoryeditskew, blend*inventoryeditblend);
@@ -3156,7 +3158,7 @@ namespace hud
             {
                 cy[1] -= draw_textf("ond:%d va:%d gl:%d(%d) oq:%d", cx[1], cy[1], 0, 0, 255, 255, 255, bf, TEXT_RIGHT_UP, -1, bs, 1, allocnodes*8, allocva, curstats[4], curstats[5], curstats[6]);
                 cy[1] -= draw_textf("wtr:%dk(%d%%) wvt:%dk(%d%%) evt:%dk eva:%dk", cx[1], cy[1], 0, 0, 255, 255, 255, bf, TEXT_RIGHT_UP, -1, bs, 1, wtris/1024, curstats[0], wverts/1024, curstats[1], curstats[2], curstats[3]);
-                cy[1] -= draw_textf("ents:%d(%d) wp:%d lm:%d rp:%d pvs:%d", cx[1], cy[1], 0, 0, 255, 255, 255, bf, TEXT_RIGHT_UP, -1, bs, 1, entities::ents.length(), entgroup.length(), ai::waypoints.length(), lightmaps.length(), curstats[7], getnumviewcells());
+                cy[1] -= draw_textf("ents:%d(%d) wp:%d lm:%d rp:%d pvs:%d", cx[1], cy[1], 0, 0, 255, 255, 255, bf, TEXT_RIGHT_UP, -1, bs, 1, entities::ents.size(), entgroup.size(), ai::waypoints.size(), lightmaps.size(), curstats[7], getnumviewcells());
                 if(game::player1->state == CS_EDITING)
                 {
                     cy[1] -= draw_textf("cube:%s%d corner:%d orient:%d grid:%d%s", cx[1], cy[1], 0, 0, 255, 255, 255, bf, TEXT_RIGHT_UP, -1, bs, 1,
@@ -3431,7 +3433,7 @@ namespace hud
                 vec targ;
                 bool hasbound = false;
                 int dist = teamhurtdist ? teamhurtdist : getworldsize();
-                loopv(game::players) if(game::players[i] && game::players[i]->team == game::player1->team)
+                for( size_t i = 0; i < game::players.size(); ++i ) if(game::players[i] && game::players[i]->team == game::player1->team)
                 {
                     if(game::players[i]->lastteamhit < 0 || lastmillis-game::players[i]->lastteamhit > teamhurttime) continue;
                     if(!getsight(camera1->o, camera1->yaw, camera1->pitch, game::players[i]->o, targ, dist, curfov, fovy)) continue;
@@ -3574,9 +3576,9 @@ namespace hud
 
     void cleanup()
     {
-        teamkills.shrink(0);
-        damagelocs.shrink(0);
-        hitlocs.shrink(0);
+        teamkills.clear();
+        damagelocs.clear();
+        hitlocs.clear();
         damageresidue = lastteam = 0;
     }
 }
