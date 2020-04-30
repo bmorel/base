@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.8)
 
 # set compile options
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -fomit-frame-pointer -ffast-math -Wall -fsigned-char -fno-exceptions -fno-rtti")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -fsigned-char -fno-exceptions -fno-rtti")
 
 # we use find_package instead of pkg_check_modules etc. so we do not depend on .pc files for libraries used across all platforms
 # this allows for easier cross-compiling with MinGW, as we can use the precompiled libraries
