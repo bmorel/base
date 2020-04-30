@@ -92,7 +92,7 @@ struct gui : guient
     struct list { int parent, w, h, springs, curspring, mouse[2]; };
 
     int nextlist;
-    static vector<list> lists;
+    static std::vector<list> lists;
     static float hitx, hity;
     static int curdepth, curlist, xsize, ysize, curx, cury, fontdepth, mergelist, mergedepth;
     static bool hitfx, skinfx, cursorfx;
@@ -101,7 +101,7 @@ struct gui : guient
     {
         if(statusstr) DELETEA(statusstr);
         if(tooltipstr) DELETEA(tooltipstr);
-        lists.shrink(0);
+        lists.clear();
         statuswidth = tooltipwidth = 0;
         mergelist = mergedepth = -1;
         tooltipforce = false;
@@ -279,18 +279,18 @@ struct gui : guient
                 lists[curlist].w = xsize;
                 lists[curlist].h = ysize;
             }
-            list &l = lists.add();
+            list &l = (lists.emplace_back(  ), lists.back());
             l.parent = curlist;
             l.springs = 0;
-            curlist = lists.length()-1;
+            curlist = lists.size()-1;
             l.mouse[0] = l.mouse[1] = xsize = ysize = 0;
         }
         else
         {
             curlist = nextlist++;
-            if(curlist >= lists.length()) // should never get here unless script code doesn't use same amount of lists in layout and render passes
+            if(curlist >= lists.size()) // should never get here unless script code doesn't use same amount of lists in layout and render passes
             {
-                list &l = lists.add();
+                list &l = (lists.emplace_back(  ), lists.back());
                 l.parent = curlist;
                 l.springs = 0;
                 l.w = l.h = l.mouse[0] = l.mouse[1] = 0;
@@ -319,7 +319,7 @@ struct gui : guient
 
     int poplist()
     {
-        if(!lists.inrange(curlist)) return 0;
+        if(!( 0 <= curlist && curlist < lists.size() )) return 0;
         list &l = lists[curlist];
         if(guilayoutpass)
         {
@@ -329,7 +329,7 @@ struct gui : guient
         curlist = l.parent;
         curdepth--;
         if(mergelist >= 0 && curdepth < mergedepth) mergelist = mergedepth = -1;
-        if(lists.inrange(curlist))
+        if(( 0 <= curlist && curlist < lists.size() ))
         {
             int w = xsize, h = ysize;
             if(ishorizontal()) cury -= h;
@@ -952,7 +952,7 @@ struct gui : guient
             t = slot.sts[0].t;
             if(t == notexture) return;
             Slot &slot = *vslot.slot;
-            if(slot.texmask&(1<<TEX_GLOW)) { loopvj(slot.sts) if(slot.sts[j].type==TEX_GLOW) { glowtex = slot.sts[j].t; break; } }
+            if(slot.texmask&(1<<TEX_GLOW)) { for( size_t j = 0; j < slot.sts.size(); ++j ) if(slot.sts[j].type==TEX_GLOW) { glowtex = slot.sts[j].t; break; } }
             if(vslot.layer)
             {
                 layer = &lookupvslot(vslot.layer);
@@ -1282,12 +1282,12 @@ TVARN(IDF_PERSIST|IDF_PRELOAD, ui_overlay_texture, "textures/guioverlay", gui::o
 TVARN(IDF_PERSIST|IDF_PRELOAD, ui_exit_texture, "textures/guiexit", gui::exittex, 0);
 TVARN(IDF_PERSIST|IDF_PRELOAD, ui_hover_texture, "textures/guihover", gui::hovertex, 0);
 
-vector<gui::list> gui::lists;
+std::vector<gui::list> gui::lists;
 float gui::basescale, gui::maxscale = 1, gui::hitx, gui::hity;
 bool gui::passthrough, gui::hitfx = true, gui::cursorfx = true, gui::skinfx = true;
 int gui::curdepth, gui::fontdepth, gui::curlist, gui::xsize, gui::ysize, gui::curx, gui::cury, gui::mergelist, gui::mergedepth;
 int gui::ty, gui::tx, gui::tpos, *gui::tcurrent, gui::tcolor;
-static vector<gui> guis;
+static std::vector<gui> guis;
 
 namespace UI
 {
@@ -1320,7 +1320,7 @@ namespace UI
             const char *keyname = getkeyname(code);
             if(keyname && isdown)
             {
-                if(e->lines.length()!=1 || !e->lines[0].empty()) e->insert(" ");
+                if(e->lines.size()!=1 || !e->lines[0].empty()) e->insert(" ");
                 e->insert(keyname);
             }
             return true;
@@ -1378,12 +1378,12 @@ namespace UI
         return true;
     }
 
-    bool active(bool pass) { return guis.length() && (!pass || needsinput); }
+    bool active(bool pass) { return guis.size() && (!pass || needsinput); }
     void limitscale(float scale) {  gui::maxscale = scale; }
 
     void addcb(guicb *cb)
     {
-        gui &g = guis.add();
+        gui &g = (guis.emplace_back(  ), guis.back());
         g.cb = cb;
         g.adjustscale();
     }
@@ -1404,7 +1404,7 @@ namespace UI
         if(ui_action_on) mouse_action[0] |= GUI_PRESSED;
 
         gui::reset();
-        guis.shrink(0);
+        guis.clear();
 
         // call all places in the engine that may want to render a gui from here, they call addcb()
         if(progressing) menu_progress();
@@ -1426,15 +1426,13 @@ namespace UI
         {
             ui_cursor_type = 0;
             guilayoutpass = 1;
-            //loopv(guis) guis[i].cb->gui(guis[i], true);
-            guis.last().cb->gui(guis.last(), true);
+            guis.back().cb->gui(guis.back(), true);
             guilayoutpass = ui_cursor_type = 0;
 
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-            //loopvrev(guis) guis[i].cb->gui(guis[i], false);
-            guis.last().cb->gui(guis.last(), false);
+            guis.back().cb->gui(guis.back(), false);
 
             glDisable(GL_BLEND);
         }
@@ -1458,11 +1456,11 @@ namespace UI
     void editorline(editor *e, const char *str, int limit)
     {
         if(!e) return;
-        if(e->lines.length() != 1 || !e->lines[0].empty()) e->lines.add();
-        e->lines.last().set(str);
-        if(limit >= 0 && e->lines.length() > limit)
+        if(e->lines.size() != 1 || !e->lines[0].empty()) e->lines.emplace_back(  );
+        e->lines.back().set(str);
+        if(limit >= 0 && e->lines.size() > limit)
         {
-            int n = e->lines.length()-limit;
+            int n = e->lines.size()-limit;
             e->removelines(0, n);
             e->cy = max(e->cy - n, 0);
             if(e->scrolly != editor::SCROLLEND) e->scrolly = max(e->scrolly - n, 0);
