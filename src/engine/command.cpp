@@ -2,6 +2,7 @@
 // is largely backwards compatible with the quake console language.
 
 #include "engine.h"
+#include <vector>
 
 bool interactive = false;
 
@@ -2728,6 +2729,13 @@ void explodelist(const char *s, vector<char *> &elems, int limit)
     const char *start, *end;
     while((limit < 0 || elems.length() < limit) && parselist(s, start, end))
         elems.add(newstring(start, end-start));
+}
+
+void explodelist(const char *s, std::vector<char *> &elems, int limit)
+{
+    const char *start, *end;
+    while((limit < 0 || elems.size() < limit) && parselist(s, start, end))
+        elems.emplace_back(newstring(start, end-start));
 }
 
 char *indexlist(const char *s, int pos)

@@ -1,5 +1,6 @@
 // script binding functionality
 
+#include <vector>
 enum { VAL_NULL = 0, VAL_INT, VAL_FLOAT, VAL_STR, VAL_ANY, VAL_CODE, VAL_MACRO, VAL_IDENT };
 
 enum
@@ -347,6 +348,7 @@ static inline const char *escapeid(ident &id) { return escapeid(id.name); }
 extern bool validateblock(const char *s);
 extern char *parsetext(const char *&p);
 extern void explodelist(const char *s, vector<char *> &elems, int limit = -1);
+extern void explodelist(const char *s, std::vector<char *> &elems, int limit = -1);
 extern int listlen(const char *s);
 extern char *indexlist(const char *s, int pos);
 extern const char *indexlist(const char *s, int pos, int &len);

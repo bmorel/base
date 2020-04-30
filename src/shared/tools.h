@@ -2,6 +2,7 @@
 
 #ifndef _TOOLS_H
 #define _TOOLS_H
+#include <vector>
 
 #ifdef NULL
 #undef NULL
@@ -32,11 +33,6 @@ typedef unsigned long long int ullong;
 #else
 #define UNUSED
 #endif
-
-inline void *operator new(size_t, void *p) { return p; }
-inline void *operator new[](size_t, void *p) { return p; }
-inline void operator delete(void *, void *) {}
-inline void operator delete[](void *, void *) {}
 
 #ifdef swap
 #undef swap
@@ -581,6 +577,36 @@ static inline bool htcmp(GLuint x, GLuint y)
 
 template <class T> struct vector
 {
+    T const* begin( void ) const
+    {
+        return buf;
+    }
+
+    T const* end( void ) const
+    {
+        return buf + length();
+    }
+
+    int size( void ) const
+    {
+        return length();
+    }
+
+    void erase( T const* it )
+    {
+        remove( it - buf );
+    }
+
+    void emplace_back( T && el )
+    {
+        add( el );
+    }
+
+    void emplace_back( T el )
+    {
+        add( el );
+    }
+
     static const int MINSIZE = 8;
 
     T *buf;
@@ -1525,8 +1551,11 @@ extern stream *openutf8file(const char *filename, const char *mode, stream *file
 extern char *loadstream(stream *f, size_t *size, bool utf8 = true);
 extern char *loadfile(const char *fn, size_t *size, bool utf8 = true);
 extern bool listdir(const char *dir, bool rel, const char *ext, vector<char *> &files);
+extern bool listdir(const char *dir, bool rel, const char *ext, std::vector<char *> &files);
 extern int listfiles(const char *dir, const char *ext, vector<char *> &files);
+extern int listfiles(const char *dir, const char *ext, std::vector<char *> &files);
 extern int listzipfiles(const char *dir, const char *ext, vector<char *> &files);
+extern int listzipfiles(const char *dir, const char *ext, std::vector<char *> &files);
 extern void backup(const char *fname, const char *ext, int revision = 0, int start = 1, bool store = false, bool full = true);
 
 extern void endianswap(void *, int, int);
@@ -1549,5 +1578,17 @@ extern void sendstring(const char *t, packetbuf &p);
 extern void sendstring(const char *t, vector<uchar> &p);
 extern void getstring(char *t, ucharbuf &p, size_t len);
 template<size_t N> static inline void getstring(char (&t)[N], ucharbuf &p) { getstring(t, p, N); }
+
+#include <algorithm>
+#include <iterator>
+
+template <typename ARR, typename VAL>
+int find( ARR const& array, VAL const& value )
+{
+    auto beg = std::begin( array );
+    auto end = std::end( array );
+    auto it = std::find( beg, end, value );
+    return end == it ? -1 : std::distance( it, beg );
+}
 
 #endif
