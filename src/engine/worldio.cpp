@@ -753,13 +753,13 @@ void loadvslots(stream *f, int numvslots)
         int changed = f->getlil<int>();
         if(changed < 0)
         {
-            loopi(-changed) vslots.add(new VSlot(NULL, vslots.size()));
+            loopi(-changed) vslots.emplace_back(new VSlot(NULL, vslots.size()));
             numvslots += changed;
         }
         else
         {
             prev[vslots.size()] = f->getlil<int>();
-            loadvslot(f, *vslots.add(new VSlot(NULL, vslots.size())), changed);
+            loadvslot(f, *(vslots.emplace_back(new VSlot(NULL, vslots.size())),vslots.back()), changed);
             numvslots--;
         }
     }
