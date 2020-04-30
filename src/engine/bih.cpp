@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <vector>
 #include "engine.h"
 
 extern vec hitsurface;
@@ -258,16 +260,16 @@ void BIH::build(mesh &m, ushort *indices, int numindices, const ivec &vmin, cons
     }
 }
 
-BIH::BIH(vector<mesh> &buildmeshes)
+BIH::BIH(std::vector<mesh> &buildmeshes)
   : meshes(NULL), nummeshes(0), nodes(NULL), numnodes(0), tribbs(NULL), numtris(0), bbmin(1e16f, 1e16f, 1e16f), bbmax(-1e16f, -1e16f, -1e16f), center(0, 0, 0), radius(0), entradius(0)
 {
     if(buildmeshes.empty()) return;
-    loopv(buildmeshes) numtris += buildmeshes[i].numtris;
+    for( size_t i = 0; i < buildmeshes.size(); ++i ) numtris += buildmeshes[i].numtris;
     if(!numtris) return;
 
-    nummeshes = buildmeshes.length();
+    nummeshes = buildmeshes.size();
     meshes = new mesh[nummeshes];
-    memcpy(meshes, buildmeshes.getbuf(), sizeof(mesh)*buildmeshes.length());
+    memcpy(meshes, buildmeshes.data(), sizeof(mesh)*buildmeshes.size());
     tribbs = new tribb[numtris];
     tribb *dsttri = tribbs;
     loopi(nummeshes)

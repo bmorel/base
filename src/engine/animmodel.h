@@ -307,21 +307,23 @@ struct animmodel : model
         virtual void calcbb(vec &bbmin, vec &bbmax, const matrix4x3 &m) {}
 
         virtual void genBIH(BIH::mesh &m) {}
-        void genBIH(skin &s, vector<BIH::mesh> &bih, const matrix4x3 &t)
+        void genBIH(skin &s, std::vector<BIH::mesh> &bih, const matrix4x3 &t)
         {
-            BIH::mesh &m = bih.add();
+            bih.emplace_back();
+            BIH::mesh &m = bih.back();
             m.xform = t;
             m.tex = s.tex;
             if(s.tex->type&Texture::ALPHA) m.flags |= BIH::MESH_ALPHA;
             if(noclip) m.flags |= BIH::MESH_NOCLIP;
             if(s.cullface) m.flags |= BIH::MESH_CULLFACE;
             genBIH(m);
-            while(bih.last().numtris > BIH::mesh::MAXTRIS)
+            while(bih.back().numtris > BIH::mesh::MAXTRIS)
             {
-                BIH::mesh &overflow = bih.dup();
+                bih.emplace_back( bih.back() );
+                BIH::mesh &overflow = bih.back();
                 overflow.tris += BIH::mesh::MAXTRIS;
                 overflow.numtris -= BIH::mesh::MAXTRIS;
-                bih[bih.length()-2].numtris = BIH::mesh::MAXTRIS;
+                bih[bih.size()-2].numtris = BIH::mesh::MAXTRIS;
             }
         }
 
@@ -510,7 +512,7 @@ struct animmodel : model
             loopv(meshes) meshes[i]->calcbb(bbmin, bbmax, m);
         }
 
-        void genBIH(vector<skin> &skins, vector<BIH::mesh> &bih, const matrix4x3 &t)
+        void genBIH(vector<skin> &skins, std::vector<BIH::mesh> &bih, const matrix4x3 &t)
         {
             loopv(meshes) meshes[i]->genBIH(skins[i], bih, t);
         }
@@ -670,7 +672,7 @@ struct animmodel : model
             }
         }
 
-        void genBIH(vector<BIH::mesh> &bih, const matrix4x3 &m)
+        void genBIH(std::vector<BIH::mesh> &bih, const matrix4x3 &m)
         {
             matrix4x3 t = m;
             t.translate(translate);
@@ -1169,7 +1171,7 @@ struct animmodel : model
         if(offsetpitch) m.rotate_around_y(offsetpitch*RAD);
     }
 
-    void genBIH(vector<BIH::mesh> &bih)
+    void genBIH(std::vector<BIH::mesh> &bih)
     {
         if(parts.empty()) return;
         matrix4x3 m;
@@ -1186,7 +1188,7 @@ struct animmodel : model
     BIH *setBIH()
     {
         if(bih) return bih;
-        vector<BIH::mesh> meshes;
+        std::vector<BIH::mesh> meshes;
         genBIH(meshes);
         bih = new BIH(meshes);
         return bih;
