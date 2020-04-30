@@ -577,6 +577,21 @@ static inline bool htcmp(GLuint x, GLuint y)
 
 template <class T> struct vector
 {
+    void resize( int sz )
+    {
+        setsize( sz );
+    }
+
+    T* data( void )
+    {
+        return buf;
+    }
+
+    T const* data( void ) const
+    {
+        return buf;
+    }
+
     void clear( void )
     {
         setsize( 0 );
@@ -1594,18 +1609,22 @@ extern uint randomMT();
 extern void putint(ucharbuf &p, int n);
 extern void putint(packetbuf &p, int n);
 extern void putint(vector<uchar> &p, int n);
+extern void putint(std::vector<uchar> &p, int n);
 extern int getint(ucharbuf &p);
 extern void putuint(ucharbuf &p, int n);
 extern void putuint(packetbuf &p, int n);
 extern void putuint(vector<uchar> &p, int n);
+extern void putuint(std::vector<uchar> &p, int n);
 extern int getuint(ucharbuf &p);
 extern void putfloat(ucharbuf &p, float f);
 extern void putfloat(packetbuf &p, float f);
 extern void putfloat(vector<uchar> &p, float f);
+extern void putfloat(std::vector<uchar> &p, float f);
 extern float getfloat(ucharbuf &p);
 extern void sendstring(const char *t, ucharbuf &p);
 extern void sendstring(const char *t, packetbuf &p);
 extern void sendstring(const char *t, vector<uchar> &p);
+extern void sendstring(const char *t, std::vector<uchar> &p);
 extern void getstring(char *t, ucharbuf &p, size_t len);
 template<size_t N> static inline void getstring(char (&t)[N], ucharbuf &p) { getstring(t, p, N); }
 
