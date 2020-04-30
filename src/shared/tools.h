@@ -602,6 +602,16 @@ template <class T> struct vector
         remove( it - buf );
     }
 
+    void erase( T const* start, T const* end )
+    {
+        remove( start - buf, end - buf );
+    }
+
+    void pop_back( void )
+    {
+        pop();
+    }
+
     void emplace_back( T && el )
     {
         add( el );
