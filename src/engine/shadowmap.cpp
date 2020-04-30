@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <vector>
 #include "engine.h"
 #include "rendertarget.h"
 
@@ -33,10 +35,9 @@ void guessshadowdir()
     if(shadowmapangle) return;
     vec lightpos(0, 0, 0);
     int numlights = 0;
-    const vector<extentity *> &ents = entities::getents();
-    loopv(ents)
+    for( auto const& el : entities::getents() )
     {
-        extentity &e = *ents[i];
+        extentity const&e = *el;
         switch(e.type)
         {
             case ET_LIGHT:
