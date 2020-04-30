@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <vector>
 #include "engine.h"
 
 editinfo *localedit = NULL;
@@ -577,7 +579,7 @@ void commitchanges(bool force)
     if(!force && !haschanged) return;
     haschanged = false;
 
-    int oldlen = valist.length();
+    int oldlen = valist.size();
     resetclipplanes();
     entitiesinoctanodes();
     inbetweenframes = false;
@@ -852,22 +854,22 @@ void editredo() { swapundo(redos, undos, EDIT_REDO); }
 // guard against subdivision
 #define protectsel(f) { undoblock *_u = newundocube(sel); f; if(_u) { pasteundo(_u); freeundo(_u); } }
 
-vector<editinfo *> editinfos;
+std::vector<editinfo *> editinfos;
 
 template<class B>
 static void packcube(cube &c, B &buf)
 {
     if(c.children)
     {
-        buf.put(0xFF);
+        buf.put( 0xFF );
         loopi(8) packcube(c.children[i], buf);
     }
     else
     {
         cube data = c;
         lilswap(data.texture, 6);
-        buf.put(c.material&0xFF);
-        buf.put(c.material>>8);
+        buf.put( c.material&0xFF );
+        buf.put( c.material>>8 );
         buf.put(data.edges, sizeof(data.edges));
         buf.put((uchar *)data.texture, sizeof(data.texture));
     }
@@ -894,7 +896,7 @@ struct vslothdr
     ushort slot;
 };
 
-static void packvslots(cube &c, vector<uchar> &buf, vector<ushort> &used)
+static void packvslots(cube &c, vector<uchar> &buf, std::vector<ushort> &used)
 {
     if(c.children)
     {
@@ -903,14 +905,13 @@ static void packvslots(cube &c, vector<uchar> &buf, vector<ushort> &used)
     else loopi(6)
     {
         ushort index = c.texture[i];
-        if(vslots.inrange(index) && vslots[index]->changed && used.find(index) < 0)
+        if(( 0 <= index && index < vslots.size() ) && vslots[index]->changed && find( used, index ) < 0)
         {
-            used.add(index);
+            used.emplace_back( index );
             VSlot &vs = *vslots[index];
-            vslothdr &hdr = *(vslothdr *)buf.pad(sizeof(vslothdr));
-            hdr.index = index;
-            hdr.slot = vs.slot->index;
-            lilswap(&hdr.index, 2);
+            vslothdr hdr = { index, (ushort)vs.slot->index };
+            lilswap( &hdr.index, sizeof( hdr.index ) );
+            buf.insert( buf.size(), (uchar*)(&hdr), sizeof( hdr ) );
             packvslot(buf, vs);
         }
     }
@@ -918,7 +919,7 @@ static void packvslots(cube &c, vector<uchar> &buf, vector<ushort> &used)
 
 static void packvslots(block3 &b, vector<uchar> &buf)
 {
-    vector<ushort> used;
+    std::vector<ushort> used;
     cube *c = b.c();
     loopi(b.size()) packvslots(c[i], buf, used);
     memset(buf.pad(sizeof(vslothdr)), 0, sizeof(vslothdr));
@@ -969,7 +970,7 @@ struct vslotmap
     vslotmap() {}
     vslotmap(int index, VSlot *vslot) : index(index), vslot(vslot) {}
 };
-static vector<vslotmap> unpackingvslots;
+static std::vector<vslotmap> unpackingvslots;
 
 static void unpackvslots(cube &c, ucharbuf &buf)
 {
@@ -980,7 +981,7 @@ static void unpackvslots(cube &c, ucharbuf &buf)
     else loopi(6)
     {
         ushort tex = c.texture[i];
-        loopvj(unpackingvslots) if(unpackingvslots[j].index == tex) { c.texture[i] = unpackingvslots[j].vslot->index; break; }
+        for( size_t j = 0; j < unpackingvslots.size(); ++j ) if(unpackingvslots[j].index == tex) { c.texture[i] = unpackingvslots[j].vslot->index; break; }
     }
 }
 
@@ -996,13 +997,13 @@ static void unpackvslots(block3 &b, ucharbuf &buf)
         if(!unpackvslot(buf, ds, false)) break;
         if(vs.index < 0 || vs.index == DEFAULT_SKY) continue;
         VSlot *edit = editvslot(vs, ds);
-        unpackingvslots.add(vslotmap(hdr.index, edit ? edit : &vs));
+        unpackingvslots.push_back(vslotmap(hdr.index, edit ? edit : &vs));
     }
 
     cube *c = b.c();
     loopi(b.size()) unpackvslots(c[i], buf);
 
-    unpackingvslots.setsize(0);
+    unpackingvslots.clear();
 }
 
 static bool compresseditinfo(const uchar *inbuf, int inlen, uchar *&outbuf, int &outlen)
@@ -1040,8 +1041,8 @@ bool packeditinfo(editinfo *e, int &inlen, uchar *&outbuf, int &outlen)
     vector<uchar> buf;
     if(!e || !e->copy || !packblock(*e->copy, buf)) return false;
     packvslots(*e->copy, buf);
-    inlen = buf.length();
-    return compresseditinfo(buf.getbuf(), buf.length(), outbuf, outlen);
+    inlen = buf.size();
+    return compresseditinfo(buf.data(), buf.size(), outbuf, outlen);
 }
 
 bool unpackeditinfo(editinfo *&e, const uchar *inbuf, int inlen, int outlen)
@@ -1050,7 +1051,7 @@ bool unpackeditinfo(editinfo *&e, const uchar *inbuf, int inlen, int outlen)
     uchar *outbuf = NULL;
     if(!uncompresseditinfo(inbuf, inlen, outbuf, outlen)) return false;
     ucharbuf buf(outbuf, outlen);
-    if(!e) e = editinfos.add(new editinfo);
+    if(!e) e = (editinfos.emplace_back( new editinfo ), editinfos.back());
     if(!unpackblock(e->copy, buf))
     {
         delete[] outbuf;
@@ -1064,7 +1065,7 @@ bool unpackeditinfo(editinfo *&e, const uchar *inbuf, int inlen, int outlen)
 void freeeditinfo(editinfo *&e)
 {
     if(!e) return;
-    editinfos.removeobj(e);
+    editinfos.erase( std::remove( editinfos.begin(), editinfos.end(), e ), editinfos.end() );
     if(e->copy) freeblock(e->copy);
     delete e;
     e = NULL;
@@ -1081,7 +1082,7 @@ bool packundo(undoblock *u, int &inlen, uchar *&outbuf, int &outlen)
 {
     vector<uchar> buf;
     buf.reserve(512);
-    *(ushort *)buf.pad(2) = lilswap(ushort(u->numents));
+    *(ushort *)(buf.resize( 2 ),&buf.back()-2) = lilswap(ushort(u->numents));
     if(u->numents)
     {
         undoent *ue = u->ents();
@@ -1107,8 +1108,8 @@ bool packundo(undoblock *u, int &inlen, uchar *&outbuf, int &outlen)
         buf.put(u->gridmap(), b.size());
         packvslots(b, buf);
     }
-    inlen = buf.length();
-    return compresseditinfo(buf.getbuf(), buf.length(), outbuf, outlen);
+    inlen = buf.size();
+    return compresseditinfo(buf.data(), buf.size(), outbuf, outlen);
 }
 
 bool unpackundo(const uchar *inbuf, int inlen, int outlen)
@@ -1298,7 +1299,7 @@ void copyprefab(char *name)
     prefab *b = loadprefab(name, true);
     if(!b) return;
     if(multiplayer(false)) client::edittrigger(sel, EDIT_COPY, 1);
-    if(!localedit) localedit = editinfos.add(new editinfo);
+    if(!localedit) localedit = (editinfos.emplace_back( new editinfo ), editinfos.back());
     if(localedit->copy) freeblock(localedit->copy);
     localedit->copy = copyblock(b->copy);
 }
@@ -1310,9 +1311,9 @@ struct prefabmesh
 
     static const int SIZE = 1<<9;
     int table[SIZE];
-    vector<vertex> verts;
-    vector<int> chain;
-    vector<ushort> tris;
+    std::vector<vertex> verts;
+    std::vector<int> chain;
+    std::vector<ushort> tris;
 
     prefabmesh() { memset(table, -1, sizeof(table)); }
 
@@ -1324,10 +1325,10 @@ struct prefabmesh
             const vertex &c = verts[i];
             if(c.pos==v.pos && c.norm==v.norm) return i;
         }
-        if(verts.length() >= USHRT_MAX) return -1;
-        verts.add(v);
-        chain.add(table[h]);
-        return table[h] = verts.length()-1;
+        if(verts.size() >= USHRT_MAX) return -1;
+        verts.emplace_back( v );
+        chain.emplace_back( table[h] );
+        return table[h] = verts.size()-1;
     }
 
     int addvert(const vec &pos, const bvec &norm)
@@ -1344,18 +1345,18 @@ struct prefabmesh
 
         p.cleanup();
 
-        loopv(verts) verts[i].norm.flip();
+        for( size_t i = 0; i < verts.size(); ++i ) verts[i].norm.flip();
         if(!p.vbo) glGenBuffers_(1, &p.vbo);
         gle::bindvbo(p.vbo);
-        glBufferData_(GL_ARRAY_BUFFER, verts.length()*sizeof(vertex), verts.getbuf(), GL_STATIC_DRAW);
+        glBufferData_(GL_ARRAY_BUFFER, verts.size()*sizeof(vertex), verts.data(), GL_STATIC_DRAW);
         gle::clearvbo();
-        p.numverts = verts.length();
+        p.numverts = verts.size();
 
         if(!p.ebo) glGenBuffers_(1, &p.ebo);
         gle::bindebo(p.ebo);
-        glBufferData_(GL_ELEMENT_ARRAY_BUFFER, tris.length()*sizeof(ushort), tris.getbuf(), GL_STATIC_DRAW);
+        glBufferData_(GL_ELEMENT_ARRAY_BUFFER, tris.size()*sizeof(ushort), tris.data(), GL_STATIC_DRAW);
         gle::clearebo();
-        p.numtris = tris.length()/3;
+        p.numtris = tris.size()/3;
     }
 
 };
@@ -1392,9 +1393,9 @@ static void genprefabmesh(prefabmesh &r, cube &c, const ivec &co, int size)
             loopj(numverts) index[j] = r.addvert(pos[j], bvec(norm[j]));
             loopj(numverts-2) if(index[0]!=index[j+1] && index[j+1]!=index[j+2] && index[j+2]!=index[0])
             {
-                r.tris.add(index[0]);
-                r.tris.add(index[j+1]);
-                r.tris.add(index[j+2]);
+                r.tris.emplace_back( index[0] );
+                r.tris.emplace_back( index[j+1] );
+                r.tris.emplace_back( index[j+2] );
             }
         }
     }
@@ -1512,7 +1513,7 @@ void previewprefab(const char *name, const vec &color)
 void mpcopy(editinfo *&e, selinfo &sel, bool local)
 {
     if(local) client::edittrigger(sel, EDIT_COPY);
-    if(e==NULL) e = editinfos.add(new editinfo);
+    if(e==NULL) e = (editinfos.emplace_back( new editinfo ), editinfos.back());
     if(e->copy) freeblock(e->copy);
     e->copy = NULL;
     protectsel(e->copy = blockcopy(block3(sel), sel.grid));
@@ -1559,19 +1560,19 @@ COMMAND(0, paste, "");
 COMMANDN(0, undo, editundo, "");
 COMMANDN(0, redo, editredo, "");
 
-static vector<int *> editingvslots;
+static std::vector<int *> editingvslots;
 struct vslotref
 {
-    vslotref(int &index) { editingvslots.add(&index); }
-    ~vslotref() { editingvslots.pop(); }
+    vslotref(int &index) { editingvslots.emplace_back( &index ); }
+    ~vslotref() { editingvslots.pop_back(); }
 };
 #define editingvslot(...) vslotref vslotrefs[] = { __VA_ARGS__ }; (void)vslotrefs;
 
 void compacteditvslots()
 {
-    loopv(editingvslots) if(*editingvslots[i]) compactvslot(*editingvslots[i]);
-    loopv(unpackingvslots) compactvslot(*unpackingvslots[i].vslot);
-    loopv(editinfos)
+    for( size_t i = 0; i < editingvslots.size(); ++i ) if(*editingvslots[i]) compactvslot(*editingvslots[i]);
+    for( size_t i = 0; i < unpackingvslots.size(); ++i ) compactvslot(*unpackingvslots[i].vslot);
+    for( size_t i = 0; i < editinfos.size(); ++i )
     {
         editinfo *e = editinfos[i];
         compactvslots(e->copy->c(), e->copy->size());
@@ -1656,19 +1657,19 @@ void brushimport(char *name)
 
 COMMAND(0, brushimport, "s");
 
-vector<int> htextures;
+std::vector<int> htextures;
 
 COMMAND(0, clearbrush, "");
 COMMAND(0, brushvert, "iii");
-void hmapcancel() { htextures.setsize(0); }
+void hmapcancel() { htextures.clear(); }
 COMMAND(0, hmapcancel, "");
 ICOMMAND(0, hmapselect, "", (),
     int t = lookupcube(cur).texture[orient];
-    int i = htextures.find(t);
+    int i = find( htextures, t );
     if(i<0)
-        htextures.add(t);
+        htextures.emplace_back( t );
     else
-        htextures.remove(i);
+        htextures.erase( htextures.begin() + i );
 );
 
 inline bool isheightmap(int o, int d, bool empty, cube *c)
@@ -1676,7 +1677,7 @@ inline bool isheightmap(int o, int d, bool empty, cube *c)
     return havesel ||
            (empty && isempty(*c)) ||
            htextures.empty() ||
-           htextures.find(c->texture[o]) >= 0;
+           find( htextures, c->texture[o] ) >= 0;
 }
 
 namespace hmap
@@ -2144,7 +2145,7 @@ vector<ushort> texmru;
 void tofronttex()                                       // maintain most recently used of the texture lists when applying texture
 {
     int c = curtexindex;
-    if(texmru.inrange(c))
+    if(( 0 <= c && c < texmru.size() ))
     {
         texmru.insert(0, texmru.remove(c));
         curtexindex = -1;
@@ -2154,13 +2155,13 @@ void tofronttex()                                       // maintain most recentl
 selinfo repsel;
 int reptex = -1;
 
-static vector<vslotmap> remappedvslots;
+static std::vector<vslotmap> remappedvslots;
 
 VAR(0, usevdelta, 1, 0, 0);
 
 static VSlot *remapvslot(int index, bool delta, const VSlot &ds)
 {
-    loopv(remappedvslots) if(remappedvslots[i].index == index) return remappedvslots[i].vslot;
+    for( size_t i = 0; i < remappedvslots.size(); ++i ) if(remappedvslots[i].index == index) return remappedvslots[i].vslot;
     VSlot &vs = lookupvslot(index, false);
     if(vs.index < 0 || vs.index == DEFAULT_SKY) return NULL;
     VSlot *edit = NULL;
@@ -2172,7 +2173,7 @@ static VSlot *remapvslot(int index, bool delta, const VSlot &ds)
     }
     else edit = ds.changed ? editvslot(vs, ds) : vs.slot->variants;
     if(!edit) edit = &vs;
-    remappedvslots.add(vslotmap(vs.index, edit));
+    remappedvslots.push_back(vslotmap(vs.index, edit));
     return edit;
 }
 
@@ -2240,16 +2241,16 @@ void mpeditvslot(int delta, VSlot &ds, int allfaces, selinfo &sel, bool local)
     bool findrep = local && !allfaces && reptex < 0;
     VSlot *findedit = NULL;
     loopselxyz(remapvslots(c, delta != 0, ds, allfaces ? -1 : sel.orient, findrep, findedit));
-    remappedvslots.setsize(0);
+    remappedvslots.clear();
     if(local && findedit)
     {
         lasttex = findedit->index;
         lasttexmillis = totalmillis;
-        curtexindex = texmru.find(lasttex);
+        curtexindex = find( texmru, lasttex );
         if(curtexindex < 0)
         {
-            curtexindex = texmru.length();
-            texmru.add(lasttex);
+            curtexindex = texmru.size();
+            texmru.emplace_back( lasttex );
         }
     }
 }
@@ -2317,8 +2318,8 @@ void vlayer(int *n)
     if(noedit()) return;
     VSlot ds;
     ds.changed = 1<<VSLOT_LAYER;
-    ds.layer = vslots.inrange(*n) ? *n : 0;
-    if(vslots.inrange(*n))
+    ds.layer = ( 0 <= *n && *n < vslots.size() ) ? *n : 0;
+    if(( 0 <= *n && *n < vslots.size() ))
     {
         ds.layer = *n;
         if(vslots[ds.layer]->changed && multiplayer()) return;
@@ -2418,7 +2419,7 @@ static int unpacktex(int &tex, ucharbuf &buf, bool insert = true)
 
 int shouldpacktex(int index)
 {
-    if(vslots.inrange(index))
+    if(( 0 <= index && index < vslots.size() ))
     {
         VSlot &vs = *vslots[index];
         if(vs.changed) return 0x10000 + vs.slot->index;
@@ -2435,24 +2436,24 @@ bool mpedittex(int tex, int allfaces, selinfo &sel, ucharbuf &buf)
 
 void filltexlist()
 {
-    if(texmru.length()!=vslots.length())
+    if(texmru.size()!=vslots.size())
     {
-        loopvrev(texmru) if(texmru[i]>=vslots.length())
+        for( size_t i = texmru.size(); i; --i ) if(texmru[i]>=vslots.size())
         {
             if(curtexindex > i) curtexindex--;
             else if(curtexindex == i) curtexindex = -1;
-            texmru.remove(i);
+            texmru.erase( texmru.begin() + i );
         }
-        loopv(vslots) if(texmru.find(i)<0) texmru.add(i);
+        for( size_t i = 0; i < vslots.size(); ++i ) if(find( texmru, i )<0) texmru.emplace_back( i );
     }
 }
 
 void compactmruvslots()
 {
-    remappedvslots.setsize(0);
-    loopvrev(texmru)
+    remappedvslots.clear();
+    for( size_t i = texmru.size(); i; --i )
     {
-        if(vslots.inrange(texmru[i]))
+        if(( 0 <= texmru[i] && texmru[i] < vslots.size() ))
         {
             VSlot &vs = *vslots[texmru[i]];
             if(vs.index >= 0)
@@ -2463,15 +2464,15 @@ void compactmruvslots()
         }
         if(curtexindex > i) curtexindex--;
         else if(curtexindex == i) curtexindex = -1;
-        texmru.remove(i);
+        texmru.erase( texmru.begin() + i );
     }
-    if(vslots.inrange(lasttex))
+    if(( 0 <= lasttex && lasttex < vslots.size() ))
     {
         VSlot &vs = *vslots[lasttex];
         lasttex = vs.index >= 0 ? vs.index : 0;
     }
     else lasttex = 0;
-    reptex = vslots.inrange(reptex) ? vslots[reptex]->index : -1;
+    reptex = ( 0 <= reptex && reptex < vslots.size() ) ? vslots[reptex]->index : -1;
 }
 
 void edittex(int i, bool save = true, bool edit = true)
@@ -2480,7 +2481,7 @@ void edittex(int i, bool save = true, bool edit = true)
     lasttexmillis = totalmillis;
     if(save)
     {
-        loopvj(texmru) if(texmru[j]==lasttex) { curtexindex = j; break; }
+        for( size_t j = 0; j < texmru.size(); ++j ) if(texmru[j]==lasttex) { curtexindex = j; break; }
     }
     if(edit) mpedittex(i, allfaces, sel, true);
 }
@@ -2494,7 +2495,7 @@ void edittex_(int *dir)
     if(texmru.empty()) return;
     texpaneltimer = texpaneltime;
     if(!(lastsel==sel)) tofronttex();
-    curtexindex = clamp(curtexindex<0 ? 0 : curtexindex+*dir, 0, texmru.length()-1);
+    curtexindex = clamp(curtexindex<0 ? 0 : curtexindex+*dir, 0, texmru.size()-1);
     edittex(texmru[curtexindex], false);
 }
 
@@ -2504,7 +2505,7 @@ void gettex()
     filltexlist();
     int tex = -1;
     loopxyz(sel, sel.grid, tex = c.texture[sel.orient]);
-    loopv(texmru) if(texmru[i]==tex)
+    for( size_t i = 0; i < texmru.size(); ++i ) if(texmru[i]==tex)
     {
         curtexindex = i;
         tofronttex();
@@ -2517,7 +2518,7 @@ void getcurtex()
     if(noedit(true)) return;
     filltexlist();
     int index = curtexindex < 0 ? 0 : curtexindex;
-    if(!texmru.inrange(index)) return;
+    if(!( 0 <= index && index < texmru.size() )) return;
     intret(texmru[index]);
 }
 
@@ -2534,7 +2535,7 @@ void gettexname(int *tex, int *subslot)
     if(noedit(true) || *tex<0) return;
     VSlot &vslot = lookupvslot(*tex, false);
     Slot &slot = *vslot.slot;
-    if(!slot.sts.inrange(*subslot)) return;
+    if(!( 0 <= *subslot && *subslot < slot.sts.size() )) return;
     result(slot.sts[*subslot].name);
 }
 
@@ -2542,7 +2543,7 @@ COMMANDN(0, edittex, edittex_, "i");
 COMMAND(0, gettex, "");
 COMMAND(0, getcurtex, "");
 COMMAND(0, getseltex, "");
-ICOMMAND(0, getreptex, "", (), { if(!noedit()) intret(vslots.inrange(reptex) ? reptex : -1); });
+ICOMMAND(0, getreptex, "", (), { if(!noedit()) intret(( 0 <= reptex && reptex < vslots.size() ) ? reptex : -1); });
 COMMAND(0, gettexname, "ii");
 
 void replacetexcube(cube &c, int oldtex, int newtex)
@@ -2595,10 +2596,10 @@ ICOMMAND(0, replaceallsel, "", (void), replacetex(true));
 
 void resettexmru()
 {
-    int old = texmru.inrange(curtexindex) ? texmru[curtexindex] : -1;
-    texmru.shrink(0);
-    loopv(vslots) texmru.add(i);
-    curtexindex = texmru.find(old);
+    int old = ( 0 <= curtexindex && curtexindex < texmru.size() ) ? texmru[curtexindex] : -1;
+    texmru.clear();
+    for( size_t i = 0; i < vslots.size(); ++i ) texmru.emplace_back( i );
+    curtexindex = find( texmru, old );
 }
 ICOMMAND(0, resettexmru, "", (void), resettexmru());
 
@@ -2818,8 +2819,8 @@ struct texturegui : guicb
     void gui(guient &g, bool firstpass)
     {
         extern VSlot dummyvslot;
-        int curtex = menutex, numpages = max((texmru.length() + thumbwidth*thumbheight - 1)/(thumbwidth*thumbheight), 1)-1;
-        if(autopreviewtexgui && texmru.inrange(rolltex)) curtex = rolltex;
+        int curtex = menutex, numpages = max((texmru.size() + thumbwidth*thumbheight - 1)/(thumbwidth*thumbheight), 1)-1;
+        if(autopreviewtexgui && ( 0 <= rolltex && rolltex < texmru.size() )) curtex = rolltex;
         if(menupage > numpages) menupage = numpages;
         else if(menupage < 0) menupage = 0;
         g.start(menustart, NULL, true);
@@ -2836,15 +2837,15 @@ struct texturegui : guicb
             g.space(2);
             if(g.button("\foreset order", 0xFFFFFF, NULL)&GUI_UP)
             {
-                int old = texmru.inrange(menutex) ? texmru[menutex] : -1;
+                int old = ( 0 <= menutex && menutex < texmru.size() ) ? texmru[menutex] : -1;
                 resettexmru();
-                curtex = menutex = rolltex = texmru.find(old);
+                curtex = menutex = rolltex = find( texmru, old );
             }
         });
         g.space(1);
         uilist(g, {
             uilist(g, {
-                if(texmru.inrange(curtex))
+                if(( 0 <= curtex && curtex < texmru.size() ))
                 {
                     VSlot &v = lookupvslot(texmru[curtex], false);
                     g.strut(60);
@@ -2874,7 +2875,7 @@ struct texturegui : guicb
                     g.textf(" - coast: \fa%f", 0xFFFFFF, NULL, 0, -1, false, NULL, 0xFFFFFF, v.coastscale);
                     VSlot &vl = lookupvslot(v.layer);
                     g.textf(" - layer: \fa%03d (%s)", 0xFFFFFF, NULL, 0, -1, false, NULL, 0xFFFFFF, v.layer, vl.slot->sts.empty() ? "<no texture>" : vl.slot->sts[0].name);
-                    loopv(v.params)
+                    for( size_t i = 0; i < v.params.size(); ++i )
                     {
                         SlotShaderParam &p = v.params[i];
                         g.textf(" - shader: \fa%s %f %f %f %f %d %d", 0xFFFFFF, NULL, 0, -1, false, NULL, 0xFFFFFF, p.name, p.val[0], p.val[1], p.val[2], p.val[3], v.palette, v.palindex);
@@ -2889,7 +2890,7 @@ struct texturegui : guicb
                     uilist(g,  loop(w, thumbwidth)
                     {
                         int ti = (menupage*thumbheight+h)*thumbwidth+w;
-                        if(ti<texmru.length())
+                        if(ti<texmru.size())
                         {
                             VSlot &v = lookupvslot(texmru[ti], false);
                             if(v.slot->sts.empty()) continue;
@@ -2932,11 +2933,11 @@ struct texturegui : guicb
             menustart = starttime();
             cube &c = lookupcube(sel.o, -sel.grid);
             rolltex = -1;
-            if(texmru.length() > 0)
+            if(texmru.size() > 0)
             {
-                if(!texmru.inrange(menutex = !isempty(c) ? texmru.find(c.texture[sel.orient]) : texmru.find(lasttex)))
+                if(!texmru.inrange(menutex = !isempty(c) ? find( texmru, c.texture[sel.orient] ) : find( texmru, lasttex )))
                     menutex = 0;
-                menupage = clamp(menutex, 0, texmru.length()-1)/(thumbwidth*thumbheight);
+                menupage = clamp(menutex, 0, texmru.size()-1)/(thumbwidth*thumbheight);
             }
             else menutex = menupage = 0;
         }
@@ -2980,14 +2981,14 @@ void rendertexturepanel(int w, int h)
         loopi(7)
         {
             int s = (i == 3 ? 285 : 220), ti = curtexindex+i-3;
-            if(texmru.inrange(ti))
+            if(( 0 <= ti && ti < texmru.size() ))
             {
                 VSlot &vslot = lookupvslot(texmru[ti]), *layer = NULL;
                 Slot &slot = *vslot.slot;
                 Texture *tex = slot.sts.empty() ? notexture : slot.sts[0].t, *glowtex = NULL, *layertex = NULL;
                 if(slot.texmask&(1<<TEX_GLOW))
                 {
-                    loopvj(slot.sts) if(slot.sts[j].type==TEX_GLOW) { glowtex = slot.sts[j].t; break; }
+                    for( size_t j = 0; j < slot.sts.size(); ++j ) if(slot.sts[j].type==TEX_GLOW) { glowtex = slot.sts[j].t; break; }
                 }
                 if(vslot.layer)
                 {
