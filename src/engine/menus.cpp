@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <vector>
 // menus.cpp: ingame menu system (also used for scores and serverlist)
 #include <algorithm>
 using std::swap;
@@ -124,9 +126,9 @@ static bool shouldclearmenu = true, clearlater = false;
 
 bool pop_ui(bool skip = true)
 {
-    menu *m = menustack.last();
+    menu *m = menustack.back();
     if(skip && m->keep && *m->keep) return false;
-    menustack.pop();
+    menustack.pop_back();
     m->passes = 0;
     if(m->keep) *m->keep = false;
     m->clear();
@@ -135,9 +137,9 @@ bool pop_ui(bool skip = true)
 
 bool remove_ui(menu *m)
 {
-    loopv(menustack) if(menustack[i] == m)
+    for( size_t i = 0; i < menustack.size(); ++i ) if(menustack[i] == m)
     {
-        menustack.remove(i);
+        menustack.erase( menustack.begin() + i );
         m->passes = 0;
         if(m->keep) *m->keep = false;
         m->clear();
@@ -149,8 +151,8 @@ bool remove_ui(menu *m)
 bool push_ui(menu *m, int pos = -1, int tab = 0, bool *keep = NULL)
 {
     if(menustack.empty()) resetcursor();
-    if(pos < 0) menustack.add(m);
-    else menustack.insert(pos, m);
+    if(pos < 0) menustack.emplace_back( m );
+    else menustack.insert( pos, m );
     if(m)
     {
         m->passes = 0;
@@ -166,9 +168,9 @@ bool push_ui(menu *m, int pos = -1, int tab = 0, bool *keep = NULL)
 
 bool restore_ui(int pos, int tab = 0, bool *keep = NULL)
 {
-    int clear = menustack.length()-pos-1;
+    int clear = menustack.size()-pos-1;
     loopi(clear) pop_ui();
-    menu *m = menustack.last();
+    menu *m = menustack.back();
     if(m)
     {
         if(clear)
@@ -188,7 +190,7 @@ bool showgui(const char *name, int tab, bool *keep)
 {
     menu *m = menus.access(name);
     if(!m) return false;
-    int pos = menustack.find(m);
+    int pos = find( menustack, m );
     if(pos < 0) push_ui(m, -1, tab, keep);
     else if(!restore_ui(pos, tab, keep)) return true;
     playsound(S_GUIPRESS, camera1->o, camera1, SND_FORCED);
@@ -199,10 +201,10 @@ extern bool closetexgui();
 int cleargui(int n, bool skip)
 {
     if(closetexgui()) n--;
-    int clear = menustack.length();
+    int clear = menustack.size();
     if(n>0) clear = min(clear, n);
     loopi(clear) if(!pop_ui(skip)) break;
-    if(!menustack.empty()) restore_ui(menustack.length() - 1);
+    if(!menustack.empty()) restore_ui(menustack.size() - 1);
     return clear;
 }
 
@@ -270,7 +272,7 @@ void ui_button(char *name, char *action, char *altact, char *icon, int *colour, 
         else if(action && *action) act = action;
         if(act)
         {
-            updatelater.add().schedule(act);
+            (updatelater.emplace_back(  ),updatelater.back()).schedule(act);
             if(shouldclearmenu) clearlater = true;
         }
     }
@@ -296,7 +298,7 @@ void ui_image(char *path, char *action, float *scale, int *overlaid, char *altpa
         else if(action && *action) act = action;
         if(act)
         {
-            updatelater.add().schedule(act);
+            (updatelater.emplace_back(  ),updatelater.back()).schedule(act);
             if(shouldclearmenu) clearlater = true;
         }
     }
@@ -325,7 +327,7 @@ void ui_slice(char *path, char *action, float *scale, float *start, float *end, 
         else if(action && *action) act = action;
         if(act)
         {
-            updatelater.add().schedule(act);
+            (updatelater.emplace_back(  ),updatelater.back()).schedule(act);
             if(shouldclearmenu) clearlater = true;
         }
     }
@@ -460,8 +462,8 @@ int ui_text_height(char *text, char *font, int wrap)
 template<class T> static void update_value(char *var, T val, char *onchange)
 {
     ident *id = writeident(var);
-    updatelater.add().schedule(id, val);
-    if(onchange && *onchange) updatelater.add().schedule(onchange);
+    (updatelater.emplace_back(  ),updatelater.back()).schedule(id, val);
+    if(onchange && *onchange) (updatelater.emplace_back(  ),updatelater.back()).schedule(onchange);
 }
 
 static int get_value_int(char *var)
@@ -528,35 +530,35 @@ void ui_slider(char *var, int *min, int *max, char *onchange, int *reverse, int 
 void ui_list_slider(char *var, char *list, char *onchange, int *reverse, int *scroll, int *colour, int *style, int *scolour)
 {
     if(!cgui) return;
-    vector<int> vals;
+    std::vector<int> vals;
     list += strspn(list, "\n\t ");
     while(*list)
     {
-        vals.add(parseint(list));
+        vals.push_back(parseint(list));
         list += strcspn(list, "\n\t \0");
         list += strspn(list, "\n\t ");
     }
     if(vals.empty()) return;
-    int val = get_value_int(var), index = vals.find(val), offset = index;
-    cgui->slider(offset, 0, vals.length()-1, *colour >= 0 ? *colour : 0xFFFFFF, intstr(val), *reverse ? true : false, *scroll ? true : false, *style, *scolour);
+    int val = get_value_int(var), index = find( vals, val ), offset = index;
+    cgui->slider(offset, 0, vals.size()-1, *colour >= 0 ? *colour : 0xFFFFFF, intstr(val), *reverse ? true : false, *scroll ? true : false, *style, *scolour);
     if(offset != index) update_value(var, vals[offset], onchange);
 }
 
 void ui_name_slider(char *var, char *names, char *list, char *onchange, int *reverse, int *scroll, int *colour, int *style, int *scolour)
 {
     if(!cgui) return;
-    vector<int> vals;
+    std::vector<int> vals;
     list += strspn(list, "\n\t ");
     while(*list)
     {
-        vals.add(parseint(list));
+        vals.push_back(parseint(list));
         list += strcspn(list, "\n\t \0");
         list += strspn(list, "\n\t ");
     }
     if(vals.empty()) return;
-    int val = get_value_int(var), index = vals.find(val), offset = index;
+    int val = get_value_int(var), index = find( vals, val ), offset = index;
     char *label = indexlist(names, offset);
-    cgui->slider(offset, 0, vals.length()-1, *colour >= 0 ? *colour : 0xFFFFFF, label, *reverse ? true : false, *scroll ? true : false, *style, *scolour);
+    cgui->slider(offset, 0, vals.size()-1, *colour >= 0 ? *colour : 0xFFFFFF, label, *reverse ? true : false, *scroll ? true : false, *style, *scolour);
     if(offset != index) update_value(var, vals[offset], onchange);
     delete[] label;
 }
@@ -648,7 +650,7 @@ void ui_body(uint *contents, char *action, char *altact, uint *onhover)
         else if(action && *action) act = action;
         if(act)
         {
-            updatelater.add().schedule(act);
+            (updatelater.emplace_back(  ),updatelater.back()).schedule(act);
             if(shouldclearmenu) clearlater = true;
         }
     }
@@ -738,7 +740,7 @@ COMMAND(0, ui_textfield, "sisbisisi");
 COMMAND(0, ui_keyfield, "sisbissi");
 COMMAND(0, ui_editor, "siiibisss");
 
-ICOMMAND(0, guicount, "", (), intret(menustack.length()));
+ICOMMAND(0, guicount, "", (), intret(menustack.size()));
 ICOMMAND(0, ui_font_width, "s", (char * font), intret(ui_font_width(font)));
 ICOMMAND(0, ui_font_height, "s", (char * font), intret(ui_font_height(font)));
 ICOMMAND(0, ui_text_width, "ssb", (char * text, char * font, int * wrap), intret(ui_text_width(text, font, *wrap)));
@@ -755,7 +757,7 @@ void ui_player_preview(int *model, int *color, int *team, int *weap, char *vanit
         else if(action && *action) act = action;
         if(act)
         {
-            updatelater.add().schedule(act);
+            (updatelater.emplace_back(  ),updatelater.back()).schedule(act);
             if(shouldclearmenu) clearlater = true;
         }
     }
@@ -785,7 +787,7 @@ void ui_model_view(char *model, char *animspec, char *action, float *scale, int 
         {
             vector<int> anims;
             game::findanims(animspec, anims);
-            if(anims.length()) anim = anims[0];
+            if(anims.size()) anim = anims[0];
         }
     }
     int ret = cgui->modelpreview(model, anim|ANIM_LOOP, *scale, *overlaid!=0, *size!=0 ? *size : 1.f, *blend!=0 ? *blend : 1.f);
@@ -796,7 +798,7 @@ void ui_model_view(char *model, char *animspec, char *action, float *scale, int 
         else if(action && *action) act = action;
         if(act)
         {
-            updatelater.add().schedule(act);
+            (updatelater.emplace_back(  ),updatelater.back()).schedule(act);
             if(shouldclearmenu) clearlater = true;
         }
     }
@@ -821,7 +823,7 @@ void ui_prefab_preview(char *prefab, int *color, char *action, float *scale, int
         else if(action && *action) act = action;
         if(act)
         {
-            updatelater.add().schedule(act);
+            (updatelater.emplace_back(  ),updatelater.back()).schedule(act);
             if(shouldclearmenu) clearlater = true;
         }
     }
@@ -843,7 +845,7 @@ struct change
     change() {}
     change(int type, const char *desc) : type(type), desc(desc) {}
 };
-static vector<change> needsapply;
+static std::vector<change> needsapply;
 
 static struct applymenu : menu
 {
@@ -853,7 +855,7 @@ static struct applymenu : menu
         g.start(menu_start, NULL, true);
         g.text("the following settings have changed:");
         g.pushfont("little");
-        loopv(needsapply) g.text(needsapply[i].desc, 0xFFFFFF, "point");
+        for( size_t i = 0; i < needsapply.size(); ++i ) g.text(needsapply[i].desc, 0xFFFFFF, "point");
         g.popfont();
         g.separator();
         g.text("apply changes now?");
@@ -862,9 +864,9 @@ static struct applymenu : menu
         if(g.button("\fgOK")&GUI_UP)
         {
             int changetypes = 0;
-            loopv(needsapply) changetypes |= needsapply[i].type;
-            if(changetypes&CHANGE_GFX) updatelater.add().schedule("resetgl");
-            if(changetypes&CHANGE_SOUND) updatelater.add().schedule("resetsound");
+            for( size_t i = 0; i < needsapply.size(); ++i ) changetypes |= needsapply[i].type;
+            if(changetypes&CHANGE_GFX) (updatelater.emplace_back(  ),updatelater.back()).schedule("resetgl");
+            if(changetypes&CHANGE_SOUND) (updatelater.emplace_back(  ),updatelater.back()).schedule("resetsound");
             clearlater = true;
         }
         g.spring();
@@ -876,7 +878,7 @@ static struct applymenu : menu
 
     void clear()
     {
-        needsapply.shrink(0);
+        needsapply.clear();
     }
 } applymenu;
 
@@ -887,31 +889,31 @@ void addchange(const char *desc, int type, bool force)
     if(!applydialog || force)
     {
         int changetypes = type;
-        if(menustack.find(&applymenu) >= 0)
+        if(find( menustack, &applymenu ) >= 0)
         {
-            loopv(needsapply) changetypes |= needsapply[i].type;
+            for( size_t i = 0; i < needsapply.size(); ++i ) changetypes |= needsapply[i].type;
             clearlater = true;
         }
-        if(changetypes&CHANGE_GFX) updatelater.add().schedule("resetgl");
-        if(changetypes&CHANGE_SOUND) updatelater.add().schedule("resetsound");
+        if(changetypes&CHANGE_GFX) (updatelater.emplace_back(  ),updatelater.back()).schedule("resetgl");
+        if(changetypes&CHANGE_SOUND) (updatelater.emplace_back(  ),updatelater.back()).schedule("resetsound");
     }
     else
     {
-        loopv(needsapply) if(!strcmp(needsapply[i].desc, desc)) return;
-        needsapply.add(change(type, desc));
-        if(needsapply.length() && menustack.find(&applymenu) < 0)
-            push_ui(&applymenu, max(menustack.length() - 1, 0));
+        for( size_t i = 0; i < needsapply.size(); ++i ) if(!strcmp(needsapply[i].desc, desc)) return;
+        needsapply.push_back(change(type, desc));
+        if(needsapply.size() && find( menustack, &applymenu ) < 0)
+            push_ui(&applymenu, menustack.size() - 1);
     }
 }
 
 void clearchanges(int type)
 {
-    loopv(needsapply)
+    for( size_t i = 0; i < needsapply.size(); ++i )
     {
         if(needsapply[i].type&type)
         {
             needsapply[i].type &= ~type;
-            if(!needsapply[i].type) needsapply.remove(i--);
+            if(!needsapply[i].type) needsapply.erase( needsapply.begin() + i-- );
         }
     }
     if(needsapply.empty()) remove_ui(&applymenu);
@@ -919,14 +921,14 @@ void clearchanges(int type)
 
 void menuprocess()
 {
-    int level = menustack.length();
+    int level = menustack.size();
     interactive = true;
-    loopv(updatelater) updatelater[i].run();
-    updatelater.shrink(0);
+    for( size_t i = 0; i < updatelater.size(); ++i ) updatelater[i].run();
+    updatelater.clear();
     interactive = false;
     if(clearlater)
     {
-        if(level==menustack.length()) loopi(level) pop_ui();
+        if(level==menustack.size()) loopi(level) pop_ui();
         clearlater = false;
     }
 }
@@ -944,7 +946,7 @@ void menu_progress()
 
 void menu_main()
 {
-    if(!menustack.empty()) UI::addcb(menustack.last());
+    if(!menustack.empty()) UI::addcb(menustack.back());
 }
 
 bool menuactive()
@@ -952,7 +954,7 @@ bool menuactive()
     return !menustack.empty();
 }
 
-ICOMMAND(0, menustacklen, "", (void), intret(menustack.length()));
+ICOMMAND(0, menustacklen, "", (void), intret(menustack.size()));
 
 void guiirc(const char *s, int width, int height)
 {
