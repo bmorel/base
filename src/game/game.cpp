@@ -1,6 +1,7 @@
 #include <algorithm>
-using std::swap;
 #include <vector>
+#include <string>
+using std::swap;
 #define GAMEWORLD 1
 #include "game.h"
 
@@ -356,17 +357,17 @@ namespace game
 
     void vanityreset()
     {
-        loopvrev(vanities) vanities.remove(i);
-        loopv(players) if(players[i]) players[i]->vitems.shrink(0);
-        player1->vitems.shrink(0);
+        for( ssize_t i = vanities.size() - 1; i >= 0; --i ) vanities.erase( vanities.begin() + i );
+        for( size_t i = 0; i < players.size(); ++i ) if(players[i]) players[i]->vitems.clear();
+        player1->vitems.clear();
     }
     ICOMMAND(0, resetvanity, "", (), vanityreset());
 
     int vanityitem(int type, const char *ref, const char *name, const char *tag, int cond, int style)
     {
         if(type < 0 || type >= VANITYMAX || !ref || !name || !tag) return -1;
-        int num = vanities.length();
-        vanity &v = vanities.add();
+        int num = vanities.size();
+        vanity &v = (vanities.emplace_back(  ), vanities.back());
         v.type = type;
         v.ref = newstring(ref);
         v.setmodel(ref);
@@ -380,9 +381,9 @@ namespace game
 
     void vanityinfo(int id, int value)
     {
-        if(id < 0) intret(vanities.length());
+        if(id < 0) intret(vanities.size());
         else if(value < 0) intret(7);
-        else if(vanities.inrange(id)) switch(value)
+        else if(( 0 <= id && id < vanities.size() )) switch(value)
         {
             case 0: intret(vanities[id].type); break;
             case 1: result(vanities[id].ref); break;
@@ -398,7 +399,7 @@ namespace game
 
     int vanityfind(const char *name)
     {
-        loopv(vanities) if(!strcmp(vanities[i].ref, name)) return i;
+        for( size_t i = 0; i < vanities.size(); ++i ) if(!strcmp(vanities[i].ref, name)) return i;
         return -1;
     }
     ICOMMAND(0, findvanity, "s", (char *s), intret(vanityfind(s)));
@@ -406,12 +407,21 @@ namespace game
     void vanitybuild(gameent *d)
     {
         if(!*d->vanity) return; // not needed
-        vector<char *> vanitylist;
+        std::vector<std::string> vanitylist;
         explodelist(d->vanity, vanitylist);
-        loopv(vanitylist) if(vanitylist[i] && *vanitylist[i])
-            loopvk(vanities) if(!strcmp(vanities[k].ref, vanitylist[i]))
-                d->vitems.add(k);
-        vanitylist.deletearrays();
+        for( std::string const& vanity : vanitylist )
+        {
+            if( !vanity.empty() )
+            {
+                for( size_t k = 0; k < vanities.size(); ++k )
+                {
+                    if(!strcmp(vanities[k].ref, vanity.data() ))
+                    {
+                        d->vitems.emplace_back( k );
+                    }
+                }
+            }
+        }
     }
 
     const char *vanitymodel(gameent *d)
@@ -423,17 +433,17 @@ namespace game
     const char *vanityfname(gameent *d, int n, bool proj)
     {
         const char *file = NULL;
-        if(vanities.inrange(n)) switch(vanities[n].style)
+        if(( 0 <= n && n < vanities.size() )) switch(vanities[n].style)
         {
             case 1: case 2:
             {
                 const char *id = vanities[n].style == 2 ? vanitymodel(d) : server::privnamex(d->privilege, d->actortype, true);
-                loopv(vanities[n].files)
+                for( size_t i = 0; i < vanities[n].files.size(); ++i )
                     if(vanities[n].files[i].proj == proj && !strcmp(vanities[n].files[i].id, id))
                         file = vanities[n].files[i].name;
                 if(!file)
                 {
-                    vanityfile &f = vanities[n].files.add();
+                    vanityfile &f = (vanities[n].files.emplace_back(  ), vanities[n].files.back());
                     defformatstring(fn, "%s/%s%s", vanities[n].model, id, proj ? "/proj" : "");
                     f.id = newstring(id);
                     f.name = newstring(fn);
@@ -616,11 +626,11 @@ namespace game
 
     int startcam()
     {
-        if(!cameras.length()) return 0;
+        if(!cameras.size()) return 0;
         if(starttvcamdyn < 0)
         {
-            loopvrev(cameras) if(cameras[i]->type <= cament::WAYPOINT) { starttvcamdyn = i+1; break; }
-            if(!cameras.inrange(starttvcamdyn)) starttvcamdyn = 0;
+            for( ssize_t i = cameras.size() - 1; i >= 0; --i ) if(cameras[i]->type <= cament::WAYPOINT) { starttvcamdyn = i+1; break; }
+            if(!( 0 <= starttvcamdyn && starttvcamdyn < cameras.size() )) starttvcamdyn = 0;
         }
         return starttvcamdyn;
     }
@@ -631,16 +641,16 @@ namespace game
         {
             if(clear)
             {
-                for(int i = cameras.length()-1; i >= startcam(); i--)
+                for(int i = cameras.size()-1; i >= startcam(); i--)
                 {
                     cament *c = cameras[i];
                     if(c->player == d)
                     {
                         if(c->type == cament::PLAYER)
                         {
-                            cameras.remove(i);
+                            cameras.erase( cameras.begin() + i );
                             delete c;
-                            for(int j = i+1; j < cameras.length(); j++) cameras[j]->cn--;
+                            for(int j = i+1; j < cameras.size(); j++) cameras[j]->cn--;
                             if(i == lastcamcn) lastcamcn = -1;
                             lastcamera = lasttvcam = lasttvchg = 0;
                         }
@@ -651,14 +661,14 @@ namespace game
             }
             else if(maptime > 0 && gameent::is(d) && d->actortype < A_ENEMY)
             {
-                cament *c = cameras.add(new cament(cameras.length(), cament::PLAYER, d->clientnum));
+                cament *c = cameras.add(new cament(cameras.size(), cament::PLAYER, d->clientnum));
                 c->o = d->headpos();
                 c->player = d;
             }
         }
         else
         {
-            cameras.deletecontents();
+            cameras.clear();
             starttvcamdyn = lastcamcn = -1;
             lastcamera = lasttvcam = lasttvchg = 0;
             resetfollow();
@@ -710,8 +720,8 @@ namespace game
             bool istv = tvmode(true, false);
             int *f = istv ? &spectvfollow : &follow;
             #define checkfollow \
-                if(*f >= players.length()) *f = -1; \
-                else if(*f < -1) *f = players.length()-1;
+                if(*f >= players.size()) *f = -1; \
+                else if(*f < -1) *f = players.size()-1;
             #define addfollow \
             { \
                 *f += clamp(n, -1, 1); \
@@ -729,9 +739,9 @@ namespace game
             }
             addfollow;
             if(!n) n = 1;
-            loopi(players.length())
+            loopi(players.size())
             {
-                if(!players.inrange(*f)) addfollow
+                if(!( 0 <= *f && *f < players.size() )) addfollow
                 else
                 {
                     gameent *d = players[*f];
@@ -800,7 +810,7 @@ namespace game
             spawneffect(PART_SPARK, center, d->height*0.5f, getcolour(d, playerovertone, playerovertonelevel), 1.5f);
             spawneffect(PART_SPARK, center, d->height*0.5f, getcolour(d, playerundertone, playerundertonelevel), 1.5f);
             if(dynlighteffects) adddynlight(center, d->height*2, vec::hexcolor(getcolour(d, playereffecttone, playereffecttonelevel)).mul(2.f), 250, 250);
-            if(entities::ents.inrange(ent) && entities::ents[ent]->type == PLAYERSTART) entities::execlink(d, ent, false);
+            if(( 0 <= ent && ent < entities::ents.size() ) && entities::ents[ent]->type == PLAYERSTART) entities::execlink(d, ent, false);
         }
         ai::respawned(d, local, ent);
     }
@@ -973,7 +983,7 @@ namespace game
         float total = AA(d->actortype, scale);
         if(d->actortype >= A_ENEMY)
         {
-            bool hasent = entities::ents.inrange(d->spawnpoint) && entities::ents[d->spawnpoint]->type == ACTOR;
+            bool hasent = ( 0 <= d->spawnpoint && d->spawnpoint < entities::ents.size() ) && entities::ents[d->spawnpoint]->type == ACTOR;
             if(hasent && entities::ents[d->spawnpoint]->attrs[9] > 0) total *= (entities::ents[d->spawnpoint]->attrs[9]/100.f);
         }
         if(d->state != CS_SPECTATOR && d->state != CS_EDITING)
@@ -1045,7 +1055,7 @@ namespace game
 
         d->setscale(rescale(d), curtime, false);
         d->speedscale = d->curscale;
-        bool hasent = d->actortype >= A_ENEMY && entities::ents.inrange(d->spawnpoint) && entities::ents[d->spawnpoint]->type == ACTOR;
+        bool hasent = d->actortype >= A_ENEMY && ( 0 <= d->spawnpoint && d->spawnpoint < entities::ents.size() ) && entities::ents[d->spawnpoint]->type == ACTOR;
         if(hasent && entities::ents[d->spawnpoint]->attrs[8] > 0) d->speedscale *= entities::ents[d->spawnpoint]->attrs[8]/100.f;
 
         float offset = d->height;
@@ -1210,7 +1220,7 @@ namespace game
             }
             else if(hassound) loopi(2) if(issound(d->sschan[i])) sounds[d->sschan[i]].pos = d->footpos(i);
         }
-        loopv(d->icons) if(lastmillis-d->icons[i].millis > d->icons[i].fade) d->icons.remove(i--);
+        for( size_t i = 0; i < d->icons.size(); ++i ) if(lastmillis-d->icons[i].millis > d->icons[i].fade) d->icons.erase( d->icons.begin() + i-- );
     }
 
     void checkfloor(gameent *d)
@@ -1227,7 +1237,7 @@ namespace game
     void checkplayers()
     {
         checkfloor(player1);
-        loopv(players) if(players[i])
+        for( size_t i = 0; i < players.size(); ++i ) if(players[i])
         {
             gameent *d = players[i];
             if(d->ai)
@@ -1312,28 +1322,28 @@ namespace game
             }
         }
     };
-    vector<damagemerge> damagemerges;
+    std::vector<damagemerge> damagemerges;
 
     void removedamagemergeall()
     {
-        loopvrev(damagemerges) damagemerges.remove(i);
+        for( ssize_t i = damagemerges.size() - 1; i >= 0; --i ) damagemerges.erase( damagemerges.begin() + i );
     }
 
     void removedamagemerges(gameent *d)
     {
-        loopvrev(damagemerges) if(damagemerges[i].d == d || damagemerges[i].v == d) damagemerges.remove(i);
+        for( ssize_t i = damagemerges.size() - 1; i >= 0; --i ) if(damagemerges[i].d == d || damagemerges[i].v == d) damagemerges.erase( damagemerges.begin() + i );
     }
 
     void pushdamagemerge(gameent *d, gameent *v, int weap, int damage, int flags)
     {
         damagemerge dt(d, v, weap, damage, flags);
-        loopv(damagemerges) if(damagemerges[i].merge(dt)) return;
-        damagemerges.add(dt);
+        for( size_t i = 0; i < damagemerges.size(); ++i ) if(damagemerges[i].merge(dt)) return;
+        damagemerges.emplace_back( dt );
     }
 
     void flushdamagemerges()
     {
-        loopv(damagemerges)
+        for( size_t i = 0; i < damagemerges.size(); ++i )
         {
             int delay = damagemergedelay;
             if(damagemerges[i].flags&damagemerge::BURN) delay = damagemergeburn;
@@ -1342,7 +1352,7 @@ namespace game
             if(totalmillis-damagemerges[i].millis >= delay)
             {
                 damagemerges[i].play();
-                damagemerges.remove(i--);
+                damagemerges.erase( damagemerges.begin() + i-- );
             }
         }
     }
@@ -1490,7 +1500,7 @@ namespace game
         int anc = d == focus && allowanc ? S_V_FRAGGED : -1, dth = d->actortype >= A_ENEMY || d->obliterated ? S_SPLOSH : S_DEATH,
             curmat = material&MATF_VOLUME;
         if(d != player1) d->resetinterp();
-        if(!isme) loopv(log) if(log[i] == player1)
+        if(!isme) for( size_t i = 0; i < log.size(); ++i ) if(log[i] == player1)
         {
             isme = true;
             break;
@@ -1568,8 +1578,8 @@ namespace game
                 {
                     concatstring(d->obit, " \fs\fzoydominating\fS");
                     v->addicon(eventicon::DOMINATE, lastmillis, eventiconfade); // dominating
-                    if(v->dominated.find(d) < 0) v->dominated.add(d);
-                    if(d->dominating.find(v) < 0) d->dominating.add(v);
+                    if(find( v->dominated, d ) < 0) v->dominated.emplace_back( d );
+                    if(find( d->dominating, v ) < 0) d->dominating.emplace_back( v );
                     if(allowanc)
                     {
                         anc = S_V_DOMINATE;
@@ -1685,11 +1695,11 @@ namespace game
         {
             if(obitverbose || obitstyles) concatstring(d->obit, rnd(2) ? ", assisted by" : ", helped by");
             else concatstring(d->obit, " +");
-            loopv(log) if(log[i])
+            for( size_t i = 0; i < log.size(); ++i ) if(log[i])
             {
                 if(obitverbose || obitstyles)
-                    concatstring(d->obit, log.length() > 1 && i == log.length()-1 ? " and " : (i ? ", " : " "));
-                else concatstring(d->obit, log.length() > 1 && i == log.length()-1 ? " + " : (i ? " + " : " "));
+                    concatstring(d->obit, log.size() > 1 && i == log.size()-1 ? " and " : (i ? ", " : " "));
+                else concatstring(d->obit, log.size() > 1 && i == log.size()-1 ? " + " : (i ? " + " : " "));
                 if(log[i]->actortype >= A_ENEMY) concatstring(d->obit, "a ");
                 concatstring(d->obit, colourname(log[i]));
                 if(showobithpleft >= (d != player1 ? 2 : 1))
@@ -1734,7 +1744,7 @@ namespace game
         {
             if(d->vitems.empty()) vanitybuild(d);
             int found[VANITYMAX] = {0};
-            loopvk(d->vitems) if(vanities.inrange(d->vitems[k]))
+            for( size_t k = 0; k < d->vitems.size(); ++k ) if(( 0 <= d->vitems[k] && d->vitems[k] < vanities.size() ))
             {
                 if(found[vanities[d->vitems[k]].type]) continue;
                 if(!(vanities[d->vitems[k]].cond&2)) continue;
@@ -1751,7 +1761,7 @@ namespace game
         }
         if(m_team(gamemode, mutators) && d->team == v->team && d != v && v == player1 && isweap(weap) && WF(WK(flags), weap, damagepenalty, WS(flags)) != 0)
         {
-            hud::teamkills.add(totalmillis);
+            hud::teamkills.emplace_back( totalmillis );
             if(hud::numteamkills() >= teamkillwarn) hud::lastteam = totalmillis ? totalmillis : 1;
         }
         if(m_bomber(gamemode)) bomber::killed(d, v);
@@ -1788,7 +1798,7 @@ namespace game
 
         if(cn == player1->clientnum) return player1;
 
-        while(cn >= players.length()) players.add(NULL);
+        while(cn >= players.size()) players.emplace_back( NULL );
 
         if(!players[cn])
         {
@@ -1803,13 +1813,13 @@ namespace game
     gameent *getclient(int cn)
     {
         if(cn == player1->clientnum) return player1;
-        if(players.inrange(cn)) return players[cn];
+        if(( 0 <= cn && cn < players.size() )) return players[cn];
         return NULL;
     }
 
     void clientdisconnected(int cn, int reason)
     {
-        if(!players.inrange(cn)) return;
+        if(!( 0 <= cn && cn < players.size() )) return;
         gameent *d = players[cn];
         if(!d) return;
         if(d->name[0] && client::showpresence >= (client::waiting(false) ? 2 : 1))
@@ -1832,10 +1842,10 @@ namespace game
         {
             e->dominating.removeobj(d);
             e->dominated.removeobj(d);
-            if(e->ai) loopvj(e->ai->state)
+            if(e->ai) for( size_t j = 0; j < e->ai->state.size(); ++j )
             {
                 if(e->ai->state[j].owner == cn) e->ai->state[j].owner = -1;
-                if(e->ai->state[j].targtype == ai::AI_T_ACTOR && e->ai->state[j].target == cn) e->ai->state.remove(j--);
+                if(e->ai->state[j].targtype == ai::AI_T_ACTOR && e->ai->state[j].target == cn) e->ai->state.erase( e->ai->state.begin() + j-- );
             }
         }
         specreset(d, true);
@@ -1915,19 +1925,19 @@ namespace game
 
     int numdynents(bool all)
     {
-        int i = 1+players.length();
-        if(all) i += projs::collideprojs.length();
+        int i = 1+players.size();
+        if(all) i += projs::collideprojs.size();
         return i;
     }
     dynent *iterdynents(int i, bool all)
     {
         if(!i) return player1;
         i--;
-        if(i<players.length()) return players[i];
-        i -= players.length();
+        if(i<players.size()) return players[i];
+        i -= players.size();
         if(all)
         {
-            if(i<projs::collideprojs.length()) return projs::collideprojs[i];
+            if(i<projs::collideprojs.size()) return projs::collideprojs[i];
         }
         return NULL;
     }
@@ -1941,7 +1951,7 @@ namespace game
     {
         if(!name) name = d->name;
         if(!client::demoplayback && d != player1 && !strcmp(name, player1->name)) return true;
-        loopv(players) if(players[i] && d != players[i] && !strcmp(name, players[i]->name)) return true;
+        for( size_t i = 0; i < players.size(); ++i ) if(players[i] && d != players[i] && !strcmp(name, players[i]->name)) return true;
         return false;
     }
 
@@ -2371,7 +2381,7 @@ namespace game
         bool rejigger = false;
         if(cam->player && cam->type != cament::PLAYER)
         {
-            for(int i = startcam(); i < cameras.length(); i++)
+            for(int i = startcam(); i < cameras.size(); i++)
             {
                 cament *c = cameras[i];
                 if(c->type == cament::PLAYER && c->player == cam->player)
@@ -2420,7 +2430,7 @@ namespace game
         int count = 0;
         loopj(c->player ? 3 : 2)
         {
-            for(int i = startcam(); i < cameras.length(); i++)
+            for(int i = startcam(); i < cameras.size(); i++)
             {
                 cament *cam = cameras[i];
                 if(cam == c) continue;
@@ -2529,42 +2539,42 @@ namespace game
         else spectvfollowing = spectvfollow;
         if(cameras.empty())
         {
-            loopv(entities::ents)
+            for( size_t i = 0; i < entities::ents.size(); ++i )
             {
                 gameentity &e = *(gameentity *)entities::ents[i];
                 if(e.type == MAPSOUND || e.type == MAPMODEL) continue;
                 vec pos = e.o;
                 if(!camcheck(pos, (e.type == PLAYERSTART ? actor[A_PLAYER].height : enttype[e.type].radius)+2)) continue;
-                cameras.add(new cament(cameras.length(), cament::ENTITY, i, pos));
+                cameras.add(new cament(cameras.size(), cament::ENTITY, i, pos));
             }
             ai::getwaypoints();
-            loopv(ai::waypoints)
+            for( size_t i = 0; i < ai::waypoints.size(); ++i )
             {
                 ai::waypoint &w = ai::waypoints[i];
                 vec pos = w.o;
                 if(!camcheck(pos, actor[A_PLAYER].height+2)) continue;
-                cameras.add(new cament(cameras.length(), cament::WAYPOINT, i, pos));
+                cameras.add(new cament(cameras.size(), cament::WAYPOINT, i, pos));
             }
-            starttvcamdyn = cameras.length();
-            loopv(players) if(players[i])
+            starttvcamdyn = cameras.size();
+            for( size_t i = 0; i < players.size(); ++i ) if(players[i])
             {
                 gameent *d = players[i];
                 if(d->actortype >= A_ENEMY) continue;
                 vec pos = d->headpos();
-                cameras.add(new cament(cameras.length(), cament::PLAYER, d->clientnum, pos, d));
+                cameras.add(new cament(cameras.size(), cament::PLAYER, d->clientnum, pos, d));
             }
             vec pos = player1->headpos();
-            cameras.add(new cament(cameras.length(), cament::PLAYER, player1->clientnum, pos, player1));
+            cameras.add(new cament(cameras.size(), cament::PLAYER, player1->clientnum, pos, player1));
             if(m_capture(gamemode)) capture::checkcams(cameras);
             else if(m_defend(gamemode)) defend::checkcams(cameras);
             else if(m_bomber(gamemode)) bomber::checkcams(cameras);
         }
         if(cameras.empty()) return false;
-        if(!cameras.inrange(lastcamcn)) lastcamcn = rnd(cameras.length());
+        if(!( 0 <= lastcamcn && lastcamcn < cameras.size() )) lastcamcn = rnd(cameras.size());
         cament *cam = cameras[lastcamcn];
         bool forced = !tvmode(false, false), renew = !lastcamera, found = spectvfollowing < 0;
         float amt = 0;
-        for(int i = startcam(); i < cameras.length(); i++)
+        for(int i = startcam(); i < cameras.size(); i++)
         {
             cament *c = cameras[i];
             if(c->type == cament::PLAYER && (c->player || ((c->player = getclient(c->id)) != NULL)))
@@ -2603,9 +2613,9 @@ namespace game
             }
             if(reset || (!updated && override))
             {
-                loopv(cameras) if(cameras[i]->ignore) cameras[i]->ignore = false;
+                for( size_t i = 0; i < cameras.size(); ++i ) if(cameras[i]->ignore) cameras[i]->ignore = false;
                 cam->ignore = true; // so we don't use the last one we just used
-                loopv(cameras)
+                for( size_t i = 0; i < cameras.size(); ++i )
                 {
                     cament *c = cameras[i];
                     if(!camupdate(c, 0, true))
@@ -2620,8 +2630,8 @@ namespace game
             if(reset)
             {
                 vector<cament *> scams;
-                scams.reserve(cameras.length());
-                scams.put(cameras.getbuf(), cameras.length());
+                scams.reserve( scams.size() + cameras.size());
+                scams.insert(scams.end(),cameras.data(), cameras.data()+cameras.size());
                 scams.sort(cament::compare);
                 lastcamcn = scams[0]->cn;
                 cam = cameras[lastcamcn];
@@ -2637,13 +2647,16 @@ namespace game
                 cam->resetlast();
                 if(cam->type == cament::ENTITY || cam->type == cament::WAYPOINT)
                 {
-                    vector<cament *> mcams;
-                    mcams.reserve(cameras.length());
-                    mcams.put(cameras.getbuf(), cameras.length());
-                    mcams.sort(cament::compare);
-                    while(mcams.length())
+                    std::vector<cament *> mcams;
+                    mcams.reserve( mcams.size() + cameras.size());
+                    mcams.insert(mcams.end(),cameras.data(), cameras.data()+cameras.size());
+                    std::sort( mcams.begin(), mcams.end(), cament::compare );
+                    while(mcams.size())
                     {
-                        cament *mcam = mcams.removeunordered(rnd(mcams.length()));
+                        int rnd_index = rnd(mcams.size());
+                        cament *mcam = mcams[rnd_index];
+                        swap( mcams[rnd_index], mcams.back() );
+                        mcams.pop_back();
                         if(mcam->type == cament::ENTITY || mcam->type == cament::WAYPOINT)
                         {
                             vec ray = vec(mcam->o).sub(cam->o);
@@ -2832,14 +2845,14 @@ namespace game
                     defformatstring(musicfile, "%s", mapmusic);
                     if(*musicdir && (type == 2 || type == 5 || ((type == 1 || type == 4) && (!*musicfile || !fileexists(findfile(musicfile, "r"), "r")))))
                     {
-                        vector<char *> files;
+                        std::vector<std::string> files;
                         listfiles(musicdir, NULL, files);
                         while(!files.empty())
                         {
-                            int r = rnd(files.length());
-                            formatstring(musicfile, "%s/%s", musicdir, files[r]);
-                            if(files[r][0] != '.' && strcmp(files[r], "readme.txt") && playmusic(musicfile, type >= 4 ? "music" : NULL)) break;
-                            else files.remove(r);
+                            int r = rnd(files.size());
+                            formatstring(musicfile, "%s/%s", musicdir, files[r].data() );
+                            if(files[r][0] != '.' && strcmp(files[r].data(), "readme.txt") && playmusic(musicfile, type >= 4 ? "music" : NULL)) break;
+                            else files.erase( files.begin() + r );
                         }
                     }
                     else if(*musicfile) playmusic(musicfile, type >= 4 ? "music" : NULL);
@@ -2847,7 +2860,7 @@ namespace game
             }
             player1->conopen = commandmillis > 0 || hud::hasinput(true);
             checkoften(player1, true);
-            loopv(players) if(players[i]) checkoften(players[i], players[i]->ai != NULL);
+            for( size_t i = 0; i < players.size(); ++i ) if(players[i]) checkoften(players[i], players[i]->ai != NULL);
             if(!allowmove(player1)) player1->stopmoving(player1->state < CS_SPECTATOR);
             if(focus->state == CS_ALIVE && gs_playing(gamestate) && isweap(focus->weapselect))
             {
@@ -2981,7 +2994,7 @@ namespace game
     {
         loopi(sizeof(animnames)/sizeof(animnames[0]))
             if(*animnames[i] && matchanim(animnames[i], pattern))
-                anims.add(i);
+                anims.emplace_back( i );
     }
 
     void renderclient(gameent *d, int third, float trans, float size, modelattach *attachments, bool secondary, int animflags, int animdelay, int lastaction, bool early)
@@ -3207,12 +3220,12 @@ namespace game
                     t = textureload(hud::teamtexname(d->team), 3);
                 if(!m_team(gamemode, mutators) || d->team != focus->team)
                 {
-                    if(d->dominating.find(focus) >= 0)
+                    if(find( d->dominating, focus ) >= 0)
                     {
                         t = textureload(hud::dominatingtex, 3);
                         colour = pulsecols[PULSE_DISCO][clamp((lastmillis/100)%PULSECOLOURS, 0, PULSECOLOURS-1)];
                     }
-                    else if(d->dominated.find(focus) >= 0)
+                    else if(find( d->dominated, focus ) >= 0)
                     {
                         t = textureload(hud::dominatedtex, 3);
                         colour = pulsecols[PULSE_DISCO][clamp((lastmillis/100)%PULSECOLOURS, 0, PULSECOLOURS-1)];
@@ -3225,7 +3238,7 @@ namespace game
                 part_icon(pos, t, aboveheadstatussize, blend*aboveheadstatusblend, 0, 0, 1, colour);
             }
         }
-        if(aboveheadicons && d->state != CS_EDITING && d->state != CS_SPECTATOR) loopv(d->icons)
+        if(aboveheadicons && d->state != CS_EDITING && d->state != CS_SPECTATOR) for( size_t i = 0; i < d->icons.size(); ++i )
         {
             if(d->icons[i].type == eventicon::AFFINITY && !(aboveheadicons&2)) continue;
             if(d->icons[i].type == eventicon::WEAPON && !(aboveheadicons&4)) continue;
@@ -3379,15 +3392,10 @@ namespace game
             int idx = third == 1 && (d->state == CS_DEAD || d->state == CS_WAITING) && d->headless && !nogore && headlessmodels ? 3 : third;
             if(d->vitems.empty())
             {
-                vector<char *> vanitylist;
-                explodelist(d->vanity, vanitylist);
-                loopv(vanitylist) if(vanitylist[i] && *vanitylist[i])
-                    loopvk(vanities) if(!strcmp(vanities[k].ref, vanitylist[i]))
-                        d->vitems.add(k);
-                vanitylist.deletearrays();
+                vanitybuild( d );
             }
             int found[VANITYMAX] = {0};
-            loopvk(d->vitems) if(vanities.inrange(d->vitems[k]))
+            for( size_t k = 0; k < d->vitems.size(); ++k ) if(( 0 <= d->vitems[k] && d->vitems[k] < vanities.size() ))
             {
                 if(found[vanities[d->vitems[k]].type]) continue;
                 if(vanities[d->vitems[k]].cond&1 && idx == 2) continue;
@@ -3444,7 +3452,7 @@ namespace game
                 if(W(d->weapselect, lightpersist)&8 && lastmillis-d->weaptime[d->weapselect] > 0 && d->weapstate[d->weapselect] == W_S_POWER)
                     haspower = true;
             }
-            if((!m_team(gamemode, mutators) || d->team != focus->team) && playerhint&8 && d->dominated.find(focus) >= 0) hasdom = true;
+            if((!m_team(gamemode, mutators) || d->team != focus->team) && playerhint&8 && find( d->dominated, focus ) >= 0) hasdom = true;
             if(d->actortype < A_ENEMY && d != focus && (useth || hashint || haslight || haspower || hasdom))
             {
                 if(hashint || haslight || haspower || hasdom)
