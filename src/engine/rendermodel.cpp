@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <vector>
 using std::swap;
 #include "engine.h"
 
@@ -271,7 +272,7 @@ COMMAND(0, mdlname, "");
     if(!loadingmodel->skeletal()) { conoutf("\frnot loading a skeletal model"); return; } \
     skelmodel *m = (skelmodel *)loadingmodel; \
     if(m->parts.empty()) return; \
-    skelmodel::skelmeshgroup *meshes = (skelmodel::skelmeshgroup *)m->parts.last()->meshes; \
+    skelmodel::skelmeshgroup *meshes = (skelmodel::skelmeshgroup *)m->parts.back()->meshes; \
     if(!meshes) return; \
     skelmodel::skeleton *skel = meshes->skel; \
     if(!skel->ragdoll) skel->ragdoll = new ragdollskel; \
@@ -282,7 +283,7 @@ COMMAND(0, mdlname, "");
 void rdvert(float *x, float *y, float *z, float *radius)
 {
     checkragdoll;
-    ragdollskel::vert &v = ragdoll->verts.add();
+    ragdollskel::vert &v = (ragdoll->verts.emplace_back(  ), ragdoll->verts.back());
     v.pos = vec(*x, *y, *z);
     v.radius = *radius > 0 ? *radius : 1;
 }
@@ -298,7 +299,7 @@ COMMAND(0, rdeye, "i");
 void rdtri(int *v1, int *v2, int *v3)
 {
     checkragdoll;
-    ragdollskel::tri &t = ragdoll->tris.add();
+    ragdollskel::tri &t = (ragdoll->tris.emplace_back(  ), ragdoll->tris.back());
     t.vert[0] = *v1;
     t.vert[1] = *v2;
     t.vert[2] = *v3;
@@ -309,7 +310,7 @@ void rdjoint(int *n, int *t, int *v1, int *v2, int *v3)
 {
     checkragdoll;
     if(*n < 0 || *n >= skel->numbones) return;
-    ragdollskel::joint &j = ragdoll->joints.add();
+    ragdollskel::joint &j = (ragdoll->joints.emplace_back(  ), ragdoll->joints.back());
     j.bone = *n;
     j.tri = *t;
     j.vert[0] = *v1;
@@ -321,7 +322,7 @@ COMMAND(0, rdjoint, "iibbb");
 void rdlimitdist(int *v1, int *v2, float *mindist, float *maxdist)
 {
     checkragdoll;
-    ragdollskel::distlimit &d = ragdoll->distlimits.add();
+    ragdollskel::distlimit &d = (ragdoll->distlimits.emplace_back(  ), ragdoll->distlimits.back());
     d.vert[0] = *v1;
     d.vert[1] = *v2;
     d.mindist = *mindist;
@@ -332,7 +333,7 @@ COMMAND(0, rdlimitdist, "iiff");
 void rdlimitrot(int *t1, int *t2, float *maxangle, float *qx, float *qy, float *qz, float *qw)
 {
     checkragdoll;
-    ragdollskel::rotlimit &r = ragdoll->rotlimits.add();
+    ragdollskel::rotlimit &r = (ragdoll->rotlimits.emplace_back(  ), ragdoll->rotlimits.back());
     r.tri[0] = *t1;
     r.tri[1] = *t2;
     r.maxangle = *maxangle * RAD;
@@ -353,7 +354,7 @@ vector<mapmodelinfo> mapmodels;
 
 void mmodel(char *name)
 {
-    mapmodelinfo &mmi = mapmodels.add();
+    mapmodelinfo &mmi = (mapmodels.emplace_back(  ), mapmodels.back());
     copystring(mmi.name, name);
     mmi.m = NULL;
 }
@@ -363,38 +364,38 @@ void mapmodelcompat(int *rad, int *h, int *tex, char *name, char *shadow)
     mmodel(name);
 }
 
-void resetmapmodels() { mapmodels.shrink(0); }
+void resetmapmodels() { mapmodels.clear(); }
 
-mapmodelinfo *getmminfo(int i) { return mapmodels.inrange(i) ? &mapmodels[i] : 0; }
+mapmodelinfo *getmminfo(int i) { return ( 0 <= i && i < mapmodels.size() ) ? &mapmodels[i] : 0; }
 
 COMMAND(0, mmodel, "s");
 COMMANDN(0, mapmodel, mapmodelcompat, "iiiss");
 ICOMMAND(0, mapmodelreset, "", (void), if(editmode || identflags&IDF_WORLD) resetmapmodels(););
 ICOMMAND(0, mapmodelindex, "s", (char *a), {
-    if(!*a) intret(mapmodels.length());
+    if(!*a) intret(mapmodels.size());
     else
     {
         int num = parseint(a);
-        if(mapmodels.inrange(num)) result(mapmodels[num].name);
+        if(( 0 <= num && num < mapmodels.size() )) result(mapmodels[num].name);
     }
 });
 
 // model registry
 
 hashnameset<model *> models;
-vector<const char *> preloadmodels;
+std::vector<const char *> preloadmodels;
 
 void preloadmodel(const char *name)
 {
     if(!name || !name[0] || models.access(name)) return;
-    preloadmodels.add(newstring(name));
+    preloadmodels.push_back(newstring(name));
 }
 
 void flushpreloadedmodels(bool msg)
 {
-    loopv(preloadmodels)
+    for( size_t i = 0; i < preloadmodels.size(); ++i )
     {
-        loadprogress = float(i+1)/preloadmodels.length();
+        loadprogress = float(i+1)/preloadmodels.size();
         model *m = loadmodel(preloadmodels[i], -1, msg);
         if(!m) { if(msg) conoutf("\frcould not load model: %s", preloadmodels[i]); }
         else
@@ -402,26 +403,26 @@ void flushpreloadedmodels(bool msg)
             m->preloadmeshes();
         }
     }
-    preloadmodels.deletearrays();
+    preloadmodels.clear();
     loadprogress = 0;
 }
 
 void preloadusedmapmodels(bool msg, bool bih)
 {
-    vector<int> mapmodels;
-    vector<extentity *> &ents = entities::getents();
-    loopv(ents)
+    std::vector<int> mapmodels;
+    auto &ents = entities::getents();
+    for( size_t i = 0; i < ents.size(); ++i )
     {
         extentity &e = *ents[i];
         if(e.type == ET_MAPMODEL && e.attrs[0] >= 0)
         {
-            if(mapmodels.find(e.attrs[0]) < 0) mapmodels.add(e.attrs[0]);
+            if(find( mapmodels, e.attrs[0] ) < 0) mapmodels.emplace_back( e.attrs[0] );
         }
     }
 
-    loopv(mapmodels)
+    for( size_t i = 0; i < mapmodels.size(); ++i )
     {
-        loadprogress = float(i+1)/mapmodels.length();
+        loadprogress = float(i+1)/mapmodels.size();
         int mmindex = mapmodels[i];
         mapmodelinfo *mmi = getmminfo(mmindex);
         if(!mmi) { if(msg) conoutf("\frcould not find map model: %d", mmindex); }
@@ -439,7 +440,7 @@ model *loadmodel(const char *name, int i, bool msg)
 {
     if(!name)
     {
-        if(!mapmodels.inrange(i)) return NULL;
+        if(!( 0 <= i && i < mapmodels.size() )) return NULL;
         mapmodelinfo &mmi = mapmodels[i];
         if(mmi.m) return mmi.m;
         name = mmi.name;
@@ -468,7 +469,7 @@ model *loadmodel(const char *name, int i, bool msg)
         models.access(m->name, m);
         m->preloadshaders();
     }
-    if(mapmodels.inrange(i) && !mapmodels[i].m) mapmodels[i].m = m;
+    if(( 0 <= i && i < mapmodels.size() ) && !mapmodels[i].m) mapmodels[i].m = m;
     return m;
 }
 
@@ -492,8 +493,8 @@ void clearmodel(char *name)
 {
     model **m = models.access(name);
     if(!m) { conoutf("\frmodel %s is not loaded", name); return; }
-    loopv(mapmodels) if(mapmodels[i].m==*m) mapmodels[i].m = NULL;
-    models.remove(name);
+    for( size_t i = 0; i < mapmodels.size(); ++i ) if(mapmodels[i].m==*m) mapmodels[i].m = NULL;
+    models.remove( name );
     (*m)->cleanup();
     delete *m;
     conoutf("\fgcleared model %s", name);
@@ -562,17 +563,17 @@ struct modelbatch
 {
     model *m;
     int flags;
-    vector<batchedmodel> batched;
+    std::vector<batchedmodel> batched;
 };
-static vector<modelbatch *> batches;
-static vector<modelattach> modelattached;
+static std::vector<modelbatch *> batches;
+static std::vector<modelattach> modelattached;
 static int numbatches = -1;
 static occludequery *modelquery = NULL;
 
 void startmodelbatches()
 {
     numbatches = 0;
-    modelattached.setsize(0);
+    modelattached.clear();
 }
 
 modelbatch &addbatchedmodel(model *m)
@@ -581,12 +582,12 @@ modelbatch &addbatchedmodel(model *m)
     if(m->batch>=0 && m->batch<numbatches && batches[m->batch]->m==m) b = batches[m->batch];
     else
     {
-        if(numbatches<batches.length())
+        if(numbatches<batches.size())
         {
             b = batches[numbatches];
-            b->batched.setsize(0);
+            b->batched.clear();
         }
-        else b = batches.add(new modelbatch);
+        else b = (batches.emplace_back( new modelbatch ), batches.back());
         b->m = m;
         b->flags = 0;
         m->batch = numbatches++;
@@ -627,7 +628,7 @@ static inline bool sorttransparentmodels(const transparentmodel &x, const transp
 
 void endmodelbatches()
 {
-    vector<transparentmodel> transparent;
+    std::vector<transparentmodel> transparent;
     loopi(numbatches)
     {
         modelbatch &b = *batches[i];
@@ -636,7 +637,7 @@ void endmodelbatches()
         {
             vec center, bbradius;
             b.m->boundbox(center, bbradius);
-            loopvj(b.batched)
+            for( size_t j = 0; j < b.batched.size(); ++j )
             {
                 batchedmodel &bm = b.batched[j];
                 if(bm.flags&(MDL_SHADOW|MDL_DYNSHADOW))
@@ -646,7 +647,7 @@ void endmodelbatches()
         }
         bool rendered = false;
         occludequery *query = NULL;
-        loopvj(b.batched)
+        for( size_t j = 0; j < b.batched.size(); ++j )
         {
             batchedmodel &bm = b.batched[j];
             if(bm.flags&MDL_CULL_VFC) continue;
@@ -658,7 +659,7 @@ void endmodelbatches()
             }
             if(bm.transparent < 1 && (!query || query->owner==bm.d) && !shadowmapping)
             {
-                transparentmodel &tm = transparent.add();
+                transparentmodel &tm = (transparent.emplace_back(  ), transparent.back());
                 tm.m = b.m;
                 tm.batched = &bm;
                 tm.dist = camera1->o.dist(bm.d && bm.d->ragdoll ? bm.d->ragdoll->center : bm.pos);
@@ -670,12 +671,12 @@ void endmodelbatches()
         if(query) endquery(query);
         if(rendered) b.m->endrender();
     }
-    if(transparent.length())
+    if(transparent.size())
     {
-        transparent.sort(sorttransparentmodels);
+        std::sort( transparent.begin(), transparent.end(), sorttransparentmodels );
         model *lastmodel = NULL;
         occludequery *query = NULL;
-        loopv(transparent)
+        for( size_t i = 0; i < transparent.size(); ++i )
         {
             transparentmodel &tm = transparent[i];
             if(lastmodel!=tm.m)
@@ -708,7 +709,7 @@ void endmodelquery()
     loopi(numbatches)
     {
         modelbatch &b = *batches[i];
-        if(b.batched.empty() || b.batched.last().query!=modelquery) continue;
+        if(b.batched.empty() || b.batched.back().query!=modelquery) continue;
         querybatches++;
     }
     if(querybatches<=1)
@@ -718,25 +719,25 @@ void endmodelquery()
         return;
     }
     flushblobs();
-    int minattached = modelattached.length();
+    int minattached = modelattached.size();
     startquery(modelquery);
     loopi(numbatches)
     {
         modelbatch &b = *batches[i];
-        if(b.batched.empty() || b.batched.last().query!=modelquery) continue;
+        if(b.batched.empty() || b.batched.back().query!=modelquery) continue;
         b.m->startrender();
         do
         {
-            batchedmodel &bm = b.batched.pop();
+            batchedmodel &bm = b.batched.back();b.batched.pop_back();
             if(bm.attached>=0) minattached = min(minattached, bm.attached);
             renderbatchedmodel(b.m, bm);
         }
-        while(b.batched.length() && b.batched.last().query==modelquery);
+        while(b.batched.size() && b.batched.back().query==modelquery);
         b.m->endrender();
     }
     endquery(modelquery);
     modelquery = NULL;
-    modelattached.setsize(minattached);
+    modelattached.resize( minattached );
 }
 
 VAR(0, maxmodelradiusdistance, 10, 200, 1000);
@@ -898,10 +899,10 @@ void rendermodel(entitylight *light, const char *mdl, int anim, const vec &o, fl
         {
             if(d->ragdoll && (d->state == CS_DEAD || d->state == CS_WAITING))
             {
-                loopv(d->ragdoll->skel->verts) renderradius(d->ragdoll->verts[i].pos, d->ragdoll->skel->verts[i].radius);
+                for( size_t i = 0; i < d->ragdoll->skel->verts.size(); ++i ) renderradius(d->ragdoll->verts[i].pos, d->ragdoll->skel->verts[i].radius);
                 gle::colorf(0.5f, 1, 1);
                 gle::defvertex();
-                loopv(d->ragdoll->skel->tris)
+                for( size_t i = 0; i < d->ragdoll->skel->tris.size(); ++i )
                 {
                     ragdollskel::tri &t = d->ragdoll->skel->tris[i];
                     gle::begin(GL_LINE_LOOP);
@@ -986,7 +987,7 @@ void rendermodel(entitylight *light, const char *mdl, int anim, const vec &o, fl
     if(numbatches>=0)
     {
         modelbatch &mb = addbatchedmodel(m);
-        batchedmodel &b = mb.batched.add();
+        batchedmodel &b = (mb.batched.emplace_back(  ), mb.batched.back());
         b.query = modelquery;
         b.pos = o;
         b.color = lightcolor;
@@ -1008,8 +1009,8 @@ void rendermodel(entitylight *light, const char *mdl, int anim, const vec &o, fl
         }
         mb.flags |= b.flags;
         b.d = d;
-        b.attached = a ? modelattached.length() : -1;
-        if(a) for(int i = 0;; i++) { modelattached.add(a[i]); if(!a[i].tag) break; }
+        b.attached = a ? modelattached.size() : -1;
+        if(a) for(int i = 0;; i++) { modelattached.emplace_back( a[i] ); if(!a[i].tag) break; }
         if(flags&MDL_CULL_QUERY) d->query = b.query = newquery(d);
         return;
     }
@@ -1082,16 +1083,16 @@ ICOMMAND(0, findanims, "s", (char *name),
 {
     vector<int> anims;
     game::findanims(name, anims);
-    vector<char> buf;
+    std::vector<char> buf;
     string num;
-    loopv(anims)
+    for( size_t i = 0; i < anims.size(); ++i )
     {
         formatstring(num, "%d", anims[i]);
-        if(i > 0) buf.add(' ');
-        buf.put(num, strlen(num));
+        if(i > 0) buf.emplace_back( ' ' );
+        buf.insert(buf.end(), num, num + strlen(num));
     }
-    buf.add('\0');
-    result(buf.getbuf());
+    buf.emplace_back( '\0' );
+    result(buf.data());
 });
 
 void loadskin(const char *dir, const char *altdir, Texture *&skin, Texture *&masks) // model skin sharing
