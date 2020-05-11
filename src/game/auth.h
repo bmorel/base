@@ -56,23 +56,23 @@ struct localop
         if(flags) delete[] flags;
     }
 };
-vector<localop> localops;
+std::vector<localop> localops;
 
 void localopreset()
 {
-    loopvrev(localops) localops.remove(i);
+    for( ssize_t i = localops.size() - 1; i >= 0; --i ) localops.erase( localops.begin() + i );
 }
 ICOMMAND(0, resetlocalop, "", (), localopreset());
 
 void localopadd(const char *name, const char *flags)
 {
     if(!name || !flags) return;
-    loopv(localops) if(!strcmp(name, localops[i].name))
+    for( size_t i = 0; i < localops.size(); ++i ) if(!strcmp(name, localops[i].name))
     {
         conoutf("local operator %s already exists with flags %s", localops[i].name, localops[i].flags);
         return;
     }
-    localop &o = localops.add();
+    localop &o = (localops.emplace_back(  ), localops.back());
     o.name = newstring(name);
     o.flags = newstring(flags);
 }
@@ -96,15 +96,15 @@ namespace auth
 
     clientinfo *findauth(uint id)
     {
-        loopv(clients) if(clients[i]->authreq == id) return clients[i];
-        loopv(connects) if(connects[i]->authreq == id) return connects[i];
+        for( size_t i = 0; i < clients.size(); ++i ) if(clients[i]->authreq == id) return clients[i];
+        for( size_t i = 0; i < connects.size(); ++i ) if(connects[i]->authreq == id) return connects[i];
         return NULL;
     }
 
     clientinfo *findauthhandle(const char *handle)
     {
-        loopv(clients) if(!strcmp(clients[i]->handle, handle)) return clients[i];
-        loopv(connects) if(!strcmp(connects[i]->handle, handle)) return connects[i];
+        for( size_t i = 0; i < clients.size(); ++i ) if(!strcmp(clients[i]->handle, handle)) return clients[i];
+        for( size_t i = 0; i < connects.size(); ++i ) if(!strcmp(connects[i]->handle, handle)) return connects[i];
         return NULL;
     }
 
@@ -192,7 +192,7 @@ namespace auth
             ci->privilege = PRIV_NONE;
             ci->handle[0] = '\0';
             int others = 0;
-            loopv(clients) if((clients[i]->privilege&PRIV_TYPE) >= PRIV_MODERATOR || clients[i]->local) others++;
+            for( size_t i = 0; i < clients.size(); ++i ) if((clients[i]->privilege&PRIV_TYPE) >= PRIV_MODERATOR || clients[i]->local) others++;
             if(!others) mastermode = MM_OPEN;
             if(!val && (privilege&PRIV_TYPE) >= PRIV_ELEVATED)
                 formatstring(msg, "\fy%s relinquished \fs\fc%s\fS status", colourname(ci), privname(privilege));
@@ -210,7 +210,7 @@ namespace auth
         if(paused)
         {
             int others = 0;
-            loopv(clients) if((clients[i]->privilege&PRIV_TYPE) >= PRIV_ADMINISTRATOR || clients[i]->local) others++;
+            for( size_t i = 0; i < clients.size(); ++i ) if((clients[i]->privilege&PRIV_TYPE) >= PRIV_ADMINISTRATOR || clients[i]->local) others++;
             if(!others) setpause(false);
         }
         if(ci->connected && resendinit)
@@ -325,7 +325,7 @@ namespace auth
             default: break;
         }
         bool local = false;
-        loopv(localops) if(!strcmp(localops[i].name, name))
+        for( size_t i = 0; i < localops.size(); ++i ) if(!strcmp(localops[i].name, name))
         {
             int o = -1;
             for(const char *c = localops[i].flags; *c; c++) switch(*c)
@@ -364,7 +364,7 @@ namespace auth
     {
         vector<char> buf;
         answerchallenge(serveraccountpass, text, buf);
-        char *val = newstring(buf.getbuf());
+        char *val = newstring(buf.data());
         for(char *s = val; *s; s++)
         {
             if(!isxdigit(*s)) { *s = '\0'; break; }
@@ -415,7 +415,7 @@ namespace auth
         }
         else loopj(ipinfo::SYNCTYPES) if(!strcmp(w[0], ipinfotypes[j]))
         {
-            ipinfo &c = control.add();
+            ipinfo &c = (control.emplace_back(  ), control.back());
             c.ip = uint(atoi(w[1]));
             c.mask = uint(atoi(w[2]));
             c.type = j;
@@ -430,7 +430,7 @@ namespace auth
 
     void regserver()
     {
-        loopvrev(control) if(control[i].flag == ipinfo::GLOBAL) control.remove(i);
+        for( ssize_t i = control.size() - 1; i >= 0; --i ) if(control[i].flag == ipinfo::GLOBAL) control.erase( control.begin() + i );
         lastregister = totalmillis ? totalmillis : 1;
         if(quickcheck)
         {
@@ -468,16 +468,16 @@ namespace auth
     void masterconnected()
     {
         regserver();
-        loopv(clients) if(clients[i]->authreq) reqauth(clients[i]);
-        loopv(connects) if(connects[i]->authreq) reqauth(connects[i]);
+        for( size_t i = 0; i < clients.size(); ++i ) if(clients[i]->authreq) reqauth(clients[i]);
+        for( size_t i = 0; i < connects.size(); ++i ) if(connects[i]->authreq) reqauth(connects[i]);
     }
 
     void masterdisconnected()
     {
         quickcheck = 0;
         hasauth = false;
-        loopv(clients) if(clients[i]->authreq) authfailed(clients[i]);
-        loopv(connects) if(connects[i]->authreq) authfailed(connects[i]);
+        for( size_t i = 0; i < clients.size(); ++i ) if(clients[i]->authreq) authfailed(clients[i]);
+        for( size_t i = 0; i < connects.size(); ++i ) if(connects[i]->authreq) authfailed(connects[i]);
     }
 }
 
