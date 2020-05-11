@@ -1,3 +1,4 @@
+#include <vector>
 #include <algorithm>
 using std::swap;
 
@@ -23,7 +24,7 @@ struct lightmapworker
     int type, bpp, w, h, orient, rotate;
     VSlot *vslot;
     Slot *slot;
-    vector<const extentity *> lights;
+    std::vector<const extentity *> lights;
     ShadowRayCache *shadowraycache;
     BlendMapCache *blendmapcache;
     bool needspace, doneworking;
@@ -66,13 +67,13 @@ struct lightmapext
     cubeext *ext;
 };
 
-static vector<lightmapworker *> lightmapworkers;
-static vector<lightmaptask> lightmaptasks[2];
-static vector<lightmapext> lightmapexts;
+static std::vector<lightmapworker *> lightmapworkers;
+static std::vector<lightmaptask> lightmaptasks[2];
+static std::vector<lightmapext> lightmapexts;
 static int packidx = 0, allocidx = 0;
 static SDL_mutex *lightlock = NULL, *tasklock = NULL;
 static SDL_cond *fullcond = NULL, *emptycond = NULL;
-static vector<const extentity *> sunlights;
+static std::vector<const extentity *> sunlights;
 
 int lightmapping = 0;
 
@@ -208,7 +209,7 @@ void check_calclight_canceled()
     if(interceptkey(SDLK_ESCAPE))
     {
         calclight_canceled = true;
-        loopv(lightmapworkers) lightmapworkers[i]->doneworking = true;
+        for( size_t i = 0; i < lightmapworkers.size(); ++i ) lightmapworkers[i]->doneworking = true;
     }
     if(!calclight_canceled) check_calclight_lmprog = false;
 }
@@ -217,7 +218,7 @@ void show_calclight_lmprog()
 {
     float bar1 = float(lmprog) / float(allocnodes);
 
-    defformatstring(text, "%d textures used", lightmaps.length());
+    defformatstring(text, "%d textures used", lightmaps.size());
 
     if(LM_PACKW <= hwtexsize && !lmprogtex)
     {
@@ -330,7 +331,7 @@ struct layoutinfo
 
 static void insertlightmap(lightmapinfo &li, layoutinfo &si)
 {
-    loopv(lightmaps)
+    for( size_t i = 0; i < lightmaps.size(); ++i )
     {
         if(lightmaps[i].type == li.type && lightmaps[i].insert(si.x, si.y, li.colorbuf, si.w, si.h))
         {
@@ -340,10 +341,10 @@ static void insertlightmap(lightmapinfo &li, layoutinfo &si)
         }
     }
 
-    lmprogid = lightmaps.length();
+    lmprogid = lightmaps.size();
 
-    si.lmid = lightmaps.length() + LMID_RESERVED;
-    LightMap &l = lightmaps.add();
+    si.lmid = lightmaps.size() + LMID_RESERVED;
+    LightMap &l = (lightmaps.emplace_back(  ), lightmaps.back());
     l.type = li.type;
     l.bpp = li.bpp;
     l.data = new uchar[li.bpp*LM_PACKW*LM_PACKH];
@@ -351,7 +352,7 @@ static void insertlightmap(lightmapinfo &li, layoutinfo &si)
     ASSERT(l.insert(si.x, si.y, li.colorbuf, si.w, si.h));
     if((li.type&LM_TYPE) == LM_BUMPMAP0)
     {
-        LightMap &r = lightmaps.add();
+        LightMap &r = (lightmaps.emplace_back(  ), lightmaps.back());
         r.type = LM_BUMPMAP1 | (li.type&~LM_TYPE);
         r.bpp = 3;
         r.data = new uchar[3*LM_PACKW*LM_PACKH];
@@ -363,7 +364,7 @@ static void insertlightmap(lightmapinfo &li, layoutinfo &si)
 static void copylightmap(lightmapinfo &li, layoutinfo &si)
 {
     lightmaps[si.lmid-LMID_RESERVED].copy(si.x, si.y, li.colorbuf, si.w, si.h);
-    if((li.type&LM_TYPE)==LM_BUMPMAP0 && lightmaps.inrange(si.lmid+1-LMID_RESERVED))
+    if((li.type&LM_TYPE)==LM_BUMPMAP0 && ( 0 <= si.lmid+1-LMID_RESERVED && si.lmid+1-LMID_RESERVED < lightmaps.size() ))
         lightmaps[si.lmid+1-LMID_RESERVED].copy(si.x, si.y, (uchar *)li.raybuf, si.w, si.h);
 }
 
@@ -442,8 +443,8 @@ static void updatelightmap(const layoutinfo &surface)
     if(lm.tex < 0)
     {
         lm.offsetx = lm.offsety = 0;
-        lm.tex = lightmaptexs.length();
-        LightMapTexture &tex = lightmaptexs.add();
+        lm.tex = lightmaptexs.size();
+        LightMapTexture &tex = (lightmaptexs.emplace_back(  ), lightmaptexs.back());
         tex.type = lm.type;
         tex.w = LM_PACKW;
         tex.h = LM_PACKH;
@@ -451,12 +452,12 @@ static void updatelightmap(const layoutinfo &surface)
         tex.unlity = lm.unlity;
         glGenTextures(1, &tex.id);
         createtexture(tex.id, tex.w, tex.h, NULL, 3, 1, tex.type&LM_ALPHA ? GL_RGBA : GL_RGB);
-        if((lm.type&LM_TYPE)==LM_BUMPMAP0 && lightmaps.inrange(surface.lmid+1-LMID_RESERVED))
+        if((lm.type&LM_TYPE)==LM_BUMPMAP0 && ( 0 <= surface.lmid+1-LMID_RESERVED && surface.lmid+1-LMID_RESERVED < lightmaps.size() ))
         {
             LightMap &lm2 = lightmaps[surface.lmid+1-LMID_RESERVED];
             lm2.offsetx = lm2.offsety = 0;
-            lm2.tex = lightmaptexs.length();
-            LightMapTexture &tex2 = lightmaptexs.add();
+            lm2.tex = lightmaptexs.size();
+            LightMapTexture &tex2 = (lightmaptexs.emplace_back(  ), lightmaptexs.back());
             tex2.type = (lm.type&~LM_TYPE) | LM_BUMPMAP0;
             tex2.w = LM_PACKW;
             tex2.h = LM_PACKH;
@@ -472,7 +473,7 @@ static void updatelightmap(const layoutinfo &surface)
 
     glBindTexture(GL_TEXTURE_2D, lightmaptexs[lm.tex].id);
     glTexSubImage2D(GL_TEXTURE_2D, 0, lm.offsetx + surface.x, lm.offsety + surface.y, surface.w, surface.h, lm.type&LM_ALPHA ? GL_RGBA : GL_RGB, GL_UNSIGNED_BYTE, &lm.data[(surface.y*LM_PACKW + surface.x)*lm.bpp]);
-    if((lm.type&LM_TYPE)==LM_BUMPMAP0 && lightmaps.inrange(surface.lmid+1-LMID_RESERVED))
+    if((lm.type&LM_TYPE)==LM_BUMPMAP0 && ( 0 <= surface.lmid+1-LMID_RESERVED && surface.lmid+1-LMID_RESERVED < lightmaps.size() ))
     {
         LightMap &lm2 = lightmaps[surface.lmid+1-LMID_RESERVED];
         glBindTexture(GL_TEXTURE_2D, lightmaptexs[lm2.tex].id);
@@ -482,12 +483,12 @@ static void updatelightmap(const layoutinfo &surface)
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 }
 
-static uint generatelumel(lightmapworker *w, const float tolerance, uint lightmask, const vector<const extentity *> &lights, const vec &target, const vec &normal, vec &sample, int x, int y)
+static uint generatelumel(lightmapworker *w, const float tolerance, uint lightmask, const std::vector<const extentity *> &lights, const vec &target, const vec &normal, vec &sample, int x, int y)
 {
     vec avgray(0, 0, 0);
     float r = 0, g = 0, b = 0;
     uint lightused = 0;
-    loopv(lights)
+    for( size_t i = 0; i < lights.size(); ++i )
     {
         if(lightmask&(1<<i)) continue;
         const extentity &light = *lights[i];
@@ -507,16 +508,16 @@ static uint generatelumel(lightmapworker *w, const float tolerance, uint lightma
         if(!light.links.empty())
         {
             int slight = -1;
-            const vector<extentity *> &ents = entities::getents();
-            loopvk(light.links)
+            const auto &ents = entities::getents();
+            for( size_t k = 0; k < light.links.size(); ++k )
             {
-                if(ents.inrange(light.links[k]) && ents[light.links[k]]->type == ET_LIGHTFX && ents[light.links[k]]->attrs[0] == LFX_SPOTLIGHT)
+                if(( 0 <= light.links[k] && light.links[k] < ents.size() ) && ents[light.links[k]]->type == ET_LIGHTFX && ents[light.links[k]]->attrs[0] == LFX_SPOTLIGHT)
                 {
                     slight = light.links[k];
                     break;
                 }
             }
-            if(ents.inrange(slight))
+            if(( 0 <= slight && slight < ents.size() ))
             {
                 extentity &spotlight = *ents[slight];
                 vec spot = vec(spotlight.o).sub(light.o).normalize();
@@ -630,12 +631,12 @@ void calcsunlight(lightmapworker *w, const vec &o, const vec &normal, float tole
 {
     flags |= RAY_SHADOW;
     if(skytexturelight) flags |= RAY_SKIPSKY;
-    loopv(sunlights) if(sunlights[i])
+    for( size_t i = 0; i < sunlights.size(); ++i ) if(sunlights[i])
     {
         const extentity &light = *sunlights[i];
-        if(light.attrs.length() < 5 || (slight[0] >= light.attrs[2] && slight[1] >= light.attrs[3] && slight[2] >= light.attrs[4])) continue;
+        if(light.attrs.size() < 5 || (slight[0] >= light.attrs[2] && slight[1] >= light.attrs[3] && slight[2] >= light.attrs[4])) continue;
         int yaw = light.attrs[0], pitch = light.attrs[1]+90,
-            offset = light.attrs.inrange(5) && light.attrs[5] ? (light.attrs[5] > 0 ? light.attrs[5] : 0) : 10, hit = 0;
+            offset = ( 0 <= 5 && 5 < light.attrs.size() ) && light.attrs[5] ? (light.attrs[5] > 0 ? light.attrs[5] : 0) : 10, hit = 0;
         vec dir(yaw*RAD, pitch*RAD);
         if(normal.dot(dir) >= 0 &&
             (w ? shadowray(w->shadowraycache, vec(dir).mul(tolerance).add(o), dir, 1e16f, flags, t) > 1e15f :
@@ -779,7 +780,7 @@ static bool generatelightmap(lightmapworker *w, float lpu, const lerpvert *lv, i
                 else loopk(3) slight[k] = max(skylightcolor[k], ambientcolor[k]);
             }
             else loopk(3) slight[k] = ambientcolor[k];
-            if(sunlights.length()) calcsunlight(w, u, normal, t, slight, lmshadows > 1 ? RAY_ALPHAPOLY : 0);
+            if(sunlights.size()) calcsunlight(w, u, normal, t, slight, lmshadows > 1 ? RAY_ALPHAPOLY : 0);
             if(w->type&LM_ALPHA) generatealpha(w, t, u, slight[3]);
             sample += aasample;
         }
@@ -852,7 +853,7 @@ static bool generatelightmap(lightmapworker *w, float lpu, const lerpvert *lv, i
 
 static int finishlightmap(lightmapworker *w)
 {
-    if((hasskylight() || sunlights.length()) && blurskylight && (w->w>1 || w->h>1))
+    if((hasskylight() || sunlights.size()) && blurskylight && (w->w>1 || w->h>1))
     {
         blurtexture(blurskylight, w->bpp, w->w, w->h, w->blur, w->ambient);
         swap(w->blur, w->ambient);
@@ -1033,7 +1034,7 @@ static void clearsurfaces(cube *c)
 static struct lightcacheentry
 {
     int x, y;
-    vector<int> lights;
+    std::vector<int> lights;
 } lightcache[LIGHTCACHESIZE];
 
 #define LIGHTCACHEHASH(x, y) (((((x)^(y))<<5) + (((x)^(y))>>5)) & (LIGHTCACHESIZE - 1))
@@ -1042,10 +1043,10 @@ VARF(0, lightcachesize, 4, 6, 12, clearlightcache());
 
 void findsunlights()
 {
-    sunlights.setsize(0);
+    sunlights.clear();
     int numents = entities::lastent(ET_SUNLIGHT);
-    const vector<extentity *> &ents = entities::getents();
-    loopi(numents) if(ents[i]->type == ET_SUNLIGHT) sunlights.add(ents[i]);
+    const auto &ents = entities::getents();
+    loopi(numents) if(ents[i]->type == ET_SUNLIGHT) sunlights.emplace_back( ents[i] );
 }
 
 void clearlightcache(int id)
@@ -1062,29 +1063,29 @@ void clearlightcache(int id)
                 lightcacheentry &lce = lightcache[LIGHTCACHEHASH(x, y)];
                 if(lce.x != x || lce.y != y) continue;
                 lce.x = -1;
-                lce.lights.setsize(0);
+                lce.lights.clear();
             }
             return;
         }
     }
-    else sunlights.setsize(0);
+    else sunlights.clear();
     for(lightcacheentry *lce = lightcache; lce < &lightcache[LIGHTCACHESIZE]; lce++)
     {
         lce->x = -1;
-        lce->lights.setsize(0);
+        lce->lights.clear();
     }
 }
 
-const vector<int> &checklightcache(int x, int y)
+const std::vector<int> &checklightcache(int x, int y)
 {
     x >>= lightcachesize;
     y >>= lightcachesize;
     lightcacheentry &lce = lightcache[LIGHTCACHEHASH(x, y)];
     if(lce.x == x && lce.y == y) return lce.lights;
 
-    lce.lights.setsize(0);
+    lce.lights.clear();
     int csize = 1<<lightcachesize, cx = x<<lightcachesize, cy = y<<lightcachesize;
-    const vector<extentity *> &ents = entities::getents();
+    const auto &ents = entities::getents();
     int numents = entities::lastent(ET_LIGHT);
     loopi(numents)
     {
@@ -1104,7 +1105,7 @@ const vector<int> &checklightcache(int x, int y)
             }
             default: continue;
         }
-        lce.lights.add(i);
+        lce.lights.emplace_back( i );
     }
 
     lce.x = x;
@@ -1130,7 +1131,7 @@ static inline void addlight(lightmapworker *w, const extentity &light, int cx, i
         float dist = p.dot(n[i]);
         if(dist >= 0 && (!radius || dist < radius))
         {
-            w->lights.add(&light);
+            w->lights.emplace_back( &light );
             break;
         }
     }
@@ -1138,14 +1139,14 @@ static inline void addlight(lightmapworker *w, const extentity &light, int cx, i
 
 static bool findlights(lightmapworker *w, int cx, int cy, int cz, int size, const vec *v, const vec *n, int numv, const Slot &slot, const VSlot &vslot)
 {
-    w->lights.setsize(0);
-    const vector<extentity *> &ents = entities::getents();
+    w->lights.clear();
+    const auto &ents = entities::getents();
     static volatile bool usinglightcache = false;
     if(size <= 1<<lightcachesize && (!lightlock || !usinglightcache))
     {
         if(lightlock) { SDL_LockMutex(lightlock); usinglightcache = true; }
-        const vector<int> &lights = checklightcache(cx, cy);
-        loopv(lights)
+        const std::vector<int> &lights = checklightcache(cx, cy);
+        for( size_t i = 0; i < lights.size(); ++i )
         {
             const extentity &light = *ents[lights[i]];
             switch(light.type)
@@ -1168,19 +1169,19 @@ static bool findlights(lightmapworker *w, int cx, int cy, int cz, int size, cons
         }
     }
     if(vslot.layer && (setblendmaporigin(w->blendmapcache, ivec(cx, cy, cz), size) || slot.layermask)) return true;
-    return w->lights.length() || hasskylight() || sunlights.length();
+    return w->lights.size() || hasskylight() || sunlights.size();
 }
 
 static int packlightmaps(lightmapworker *w = NULL)
 {
     int numpacked = 0;
-    for(; packidx < lightmaptasks[0].length(); packidx++, numpacked++)
+    for(; packidx < lightmaptasks[0].size(); packidx++, numpacked++)
     {
         lightmaptask &t = lightmaptasks[0][packidx];
         if(!t.lightmaps) break;
         if(t.ext && t.c->ext != t.ext)
         {
-            lightmapext &e = lightmapexts.add();
+            lightmapext &e = (lightmapexts.emplace_back(  ), lightmapexts.back());
             e.c = t.c;
             e.ext = t.ext;
         }
@@ -1696,7 +1697,7 @@ int lightmapworker::work(void *data)
     SDL_LockMutex(tasklock);
     while(!w->doneworking)
     {
-        if(allocidx < lightmaptasks[0].length())
+        if(allocidx < lightmaptasks[0].size())
         {
             lightmaptask &t = lightmaptasks[0][allocidx++];
             t.worker = w;
@@ -1708,7 +1709,7 @@ int lightmapworker::work(void *data)
         }
         else
         {
-            if(packidx >= lightmaptasks[0].length()) SDL_CondSignal(emptycond);
+            if(packidx >= lightmaptasks[0].size()) SDL_CondSignal(emptycond);
             SDL_CondWait(fullcond, tasklock);
         }
     }
@@ -1719,13 +1720,13 @@ int lightmapworker::work(void *data)
 static bool processtasks(bool finish = false)
 {
     if(tasklock) SDL_LockMutex(tasklock);
-    while(finish || lightmaptasks[1].length())
+    while(finish || lightmaptasks[1].size())
     {
-        if(packidx >= lightmaptasks[0].length())
+        if(packidx >= lightmaptasks[0].size())
         {
             if(lightmaptasks[1].empty()) break;
-            lightmaptasks[0].setsize(0);
-            lightmaptasks[0].move(lightmaptasks[1]);
+            lightmaptasks[0].clear();
+            std::swap( lightmaptasks[0], lightmaptasks[1] );
             packidx = allocidx = 0;
             if(fullcond) SDL_CondBroadcast(fullcond);
         }
@@ -1736,7 +1737,7 @@ static bool processtasks(bool finish = false)
         }
         else
         {
-            while(allocidx < lightmaptasks[0].length())
+            while(allocidx < lightmaptasks[0].size())
             {
                 lightmaptask &t = lightmaptasks[0][allocidx++];
                 t.worker = lightmapworkers[0];
@@ -1779,7 +1780,7 @@ static void generatelightmaps(cube *c, const ivec &co, int size)
             }
             if(usefacemask)
             {
-                lightmaptask &t = lightmaptasks[1].add();
+                lightmaptask &t = (lightmaptasks[1].emplace_back(  ), lightmaptasks[1].back());
                 t.o = o;
                 t.size = size;
                 t.usefaces = usefacemask;
@@ -1787,7 +1788,7 @@ static void generatelightmaps(cube *c, const ivec &co, int size)
                 t.ext = NULL;
                 t.lightmaps = NULL;
                 t.progress = taskprogress;
-                if(lightmaptasks[1].length() >= MAXLIGHTMAPTASKS && !processtasks()) return;
+                if(lightmaptasks[1].size() >= MAXLIGHTMAPTASKS && !processtasks()) return;
             }
         }
     nextcube:;
@@ -1898,7 +1899,7 @@ static bool previewblends(lightmapworker *w, cube &c, const ivec &co, int size)
                    surf.lmid[0] == surf.lmid[1] &&
                    (surf.numverts&MAXFACEVERTS) == numverts &&
                    !memcmp(curlitverts, c.ext->verts() + surf.verts, numverts*sizeof(vertinfo)) &&
-                   lightmaps.inrange(surf.lmid[0]-LMID_RESERVED) &&
+                   ( 0 <= surf.lmid[0]-LMID_RESERVED && surf.lmid[0]-LMID_RESERVED < lightmaps.size() ) &&
                    lightmaps[surf.lmid[0]-LMID_RESERVED].type==w->type)
                 {
                     vertinfo *oldverts = c.ext->verts() + surf.verts;
@@ -1971,7 +1972,7 @@ static bool previewblends(lightmapworker *w, cube *c, const ivec &co, int size, 
 void previewblends(const ivec &bo, const ivec &bs)
 {
     loadlayermasks();
-    if(lightmapworkers.empty()) lightmapworkers.add(new lightmapworker);
+    if(lightmapworkers.empty()) lightmapworkers.emplace_back( new lightmapworker );
     lightmapworkers[0]->reset();
     if(previewblends(lightmapworkers[0], worldroot, ivec(0, 0, 0), hdr.worldsize/2, bo, bs))
         commitchanges(true);
@@ -1979,23 +1980,23 @@ void previewblends(const ivec &bo, const ivec &bs)
 
 void cleanuplightmaps()
 {
-    loopv(lightmaps)
+    for( size_t i = 0; i < lightmaps.size(); ++i )
     {
         LightMap &lm = lightmaps[i];
         lm.tex = lm.offsetx = lm.offsety = -1;
     }
-    loopv(lightmaptexs) glDeleteTextures(1, &lightmaptexs[i].id);
-    lightmaptexs.shrink(0);
+    for( size_t i = 0; i < lightmaptexs.size(); ++i ) glDeleteTextures(1, &lightmaptexs[i].id);
+    lightmaptexs.clear();
     if(lmprogtex) { glDeleteTextures(1, &lmprogtex); lmprogtex = 0; }
 }
 
 void resetlightmaps(bool fullclean)
 {
     cleanuplightmaps();
-    lightmaps.shrink(0);
+    lightmaps.clear();
     compressed.clear();
     clearlightcache();
-    if(fullclean) while(lightmapworkers.length()) delete lightmapworkers.pop();
+    if(fullclean) lightmapworkers.clear();
 }
 
 lightmapworker::lightmapworker()
@@ -2082,8 +2083,8 @@ static void cleanuplocks()
 
 static void setupthreads(int numthreads)
 {
-    loopi(2) lightmaptasks[i].setsize(0);
-    lightmapexts.setsize(0);
+    loopi(2) lightmaptasks[i].clear();
+    lightmapexts.clear();
     packidx = allocidx = 0;
     lightmapping = numthreads;
     if(lightmapping > 1)
@@ -2093,7 +2094,7 @@ static void setupthreads(int numthreads)
         ALLOCLOCK(fullcond, SDL_CreateCond);
         ALLOCLOCK(emptycond, SDL_CreateCond);
     }
-    while(lightmapworkers.length() < lightmapping) lightmapworkers.add(new lightmapworker);
+    while(lightmapworkers.size() < lightmapping) lightmapworkers.emplace_back( new lightmapworker );
     loopi(lightmapping)
     {
         lightmapworker *w = lightmapworkers[i];
@@ -2112,26 +2113,26 @@ static void cleanupthreads()
     if(lightmapping > 1)
     {
         SDL_LockMutex(tasklock);
-        loopv(lightmapworkers) lightmapworkers[i]->doneworking = true;
+        for( size_t i = 0; i < lightmapworkers.size(); ++i ) lightmapworkers[i]->doneworking = true;
         SDL_CondBroadcast(fullcond);
-        loopv(lightmapworkers)
+        for( size_t i = 0; i < lightmapworkers.size(); ++i )
         {
             lightmapworker *w = lightmapworkers[i];
             if(w->needspace && w->spacecond) SDL_CondSignal(w->spacecond);
         }
         SDL_UnlockMutex(tasklock);
-        loopv(lightmapworkers)
+        for( size_t i = 0; i < lightmapworkers.size(); ++i )
         {
             lightmapworker *w = lightmapworkers[i];
             if(w->thread) SDL_WaitThread(w->thread, NULL);
         }
     }
-    loopv(lightmapexts)
+    for( size_t i = 0; i < lightmapexts.size(); ++i )
     {
         lightmapext &e = lightmapexts[i];
         setcubeext(*e.c, e.ext);
     }
-    loopv(lightmapworkers) lightmapworkers[i]->cleanupthread();
+    for( size_t i = 0; i < lightmapworkers.size(); ++i ) lightmapworkers[i]->cleanupthread();
     cleanuplocks();
     lightmapping = 0;
 }
@@ -2168,7 +2169,7 @@ void calclight(int *quality, int *quick)
     Uint32 end = SDL_GetTicks();
     if(timer) SDL_RemoveTimer(timer);
     uint total = 0, lumels = 0;
-    loopv(lightmaps)
+    for( size_t i = 0; i < lightmaps.size(); ++i )
     {
         insertunlit(i);
         if(!editmode) lightmaps[i].finalize();
@@ -2184,8 +2185,8 @@ void calclight(int *quality, int *quick)
     else
         conoutf("\fggenerated %d lightmaps using %d%% of %d textures (%.1f seconds)",
             total,
-            lightmaps.length() ? lumels * 100 / (lightmaps.length() * LM_PACKW * LM_PACKH) : 0,
-            lightmaps.length(),
+            lightmaps.size() ? lumels * 100 / (lightmaps.size() * LM_PACKW * LM_PACKH) : 0,
+            lightmaps.size(),
             (end - start) / 1000.0f);
     if(lmprogtex) { glDeleteTextures(1, &lmprogtex); lmprogtex = 0; }
 }
@@ -2212,7 +2213,7 @@ void patchlight(int *quality, int *quick)
     lmprogtexticks = 0;
     lmprogid = -1;
     int total = 0, lumels = 0;
-    loopv(lightmaps)
+    for( size_t i = 0; i < lightmaps.size(); ++i )
     {
         if((lightmaps[i].type&LM_TYPE) != LM_BUMPMAP1) lmprogid = i;
         total -= lightmaps[i].lightmaps;
@@ -2231,7 +2232,7 @@ void patchlight(int *quality, int *quick)
     if(patchnormals) clearnormals();
     Uint32 end = SDL_GetTicks();
     if(timer) SDL_RemoveTimer(timer);
-    loopv(lightmaps)
+    for( size_t i = 0; i < lightmaps.size(); ++i )
     {
         total += lightmaps[i].lightmaps;
         lumels += lightmaps[i].lumels;
@@ -2244,8 +2245,8 @@ void patchlight(int *quality, int *quick)
     else
         conoutf("\fgpatched %d lightmaps using %d%% of %d textures (%.1f seconds)",
             total,
-            lightmaps.length() ? lumels * 100 / (lightmaps.length() * LM_PACKW * LM_PACKH) : 0,
-            lightmaps.length(),
+            lightmaps.size() ? lumels * 100 / (lightmaps.size() * LM_PACKW * LM_PACKH) : 0,
+            lightmaps.size(),
             (end - start) / 1000.0f);
     if(lmprogtex) { glDeleteTextures(1, &lmprogtex); lmprogtex = 0; }
 }
@@ -2266,7 +2267,7 @@ COMMAND(0, clearlightmaps, "");
 
 void setfullbrightlevel(int fullbrightlevel)
 {
-    if(lightmaptexs.length() > LMID_BRIGHT)
+    if(lightmaptexs.size() > LMID_BRIGHT)
     {
         uchar bright[3] = { uchar(fullbrightlevel), uchar(fullbrightlevel), uchar(fullbrightlevel) };
         createtexture(lightmaptexs[LMID_BRIGHT].id, 1, 1, bright, 0, 1);
@@ -2274,7 +2275,7 @@ void setfullbrightlevel(int fullbrightlevel)
     initlights();
 }
 
-VARF(0, fullbright, 0, 0, 1, if(lightmaptexs.length()) { initlights(); lightents(); });
+VARF(0, fullbright, 0, 0, 1, if(lightmaptexs.size()) { initlights(); lightents(); });
 VARF(IDF_PERSIST, fullbrightlevel, 0, 128, 255, setfullbrightlevel(fullbrightlevel));
 
 vector<LightMapTexture> lightmaptexs;
@@ -2310,7 +2311,7 @@ static void rotatenormals(cube *c)
             continue;
         }
         else if(!ch.ext) continue;
-        loopj(6) if(lightmaps.inrange(ch.ext->surfaces[j].lmid[0]+1-LMID_RESERVED))
+        loopj(6) if(( 0 <= ch.ext->surfaces[j].lmid[0]+1-LMID_RESERVED && ch.ext->surfaces[j].lmid[0]+1-LMID_RESERVED < lightmaps.size() ))
         {
             VSlot &vslot = lookupvslot(ch.texture[j], false);
             if(!vslot.rotation) continue;
@@ -2409,10 +2410,10 @@ static void copylightmap(LightMap &lm, uchar *dst, size_t stride)
 
 void genreservedlightmaptexs()
 {
-    while(lightmaptexs.length() < LMID_RESERVED)
+    while(lightmaptexs.size() < LMID_RESERVED)
     {
-        LightMapTexture &tex = lightmaptexs.add();
-        tex.type = lightmaptexs.length()&1 ? LM_DIFFUSE : LM_BUMPMAP1;
+        LightMapTexture &tex = (lightmaptexs.emplace_back(  ), lightmaptexs.back());
+        tex.type = lightmaptexs.size()&1 ? LM_DIFFUSE : LM_BUMPMAP1;
         glGenTextures(1, &tex.id);
     }
     uchar unlit[3] = { ambientcolor[0], ambientcolor[1], ambientcolor[2] };
@@ -2433,7 +2434,7 @@ static void findunlit(int i)
     if(lm.unlitx>=0) return;
     else if((lm.type&LM_TYPE)==LM_BUMPMAP0)
     {
-        if(i+1>=lightmaps.length() || (lightmaps[i+1].type&LM_TYPE)!=LM_BUMPMAP1) return;
+        if(i+1>=lightmaps.size() || (lightmaps[i+1].type&LM_TYPE)!=LM_BUMPMAP1) return;
     }
     else if((lm.type&LM_TYPE)!=LM_DIFFUSE) return;
     uchar *data = lm.data;
@@ -2465,10 +2466,10 @@ VARF(0, batchlightmaps, 0, 4, 256, { cleanuplightmaps(); initlights(); allchange
 
 void genlightmaptexs(int flagmask, int flagval)
 {
-    if(lightmaptexs.length() < LMID_RESERVED) genreservedlightmaptexs();
+    if(lightmaptexs.size() < LMID_RESERVED) genreservedlightmaptexs();
 
     int remaining[3] = { 0, 0, 0 }, total = 0;
-    loopv(lightmaps)
+    for( size_t i = 0; i < lightmaps.size(); ++i )
     {
         LightMap &lm = lightmaps[i];
         if(lm.tex >= 0 || (lm.type&flagmask)!=flagval) continue;
@@ -2484,7 +2485,7 @@ void genlightmaptexs(int flagmask, int flagval)
     {
         int type = LM_DIFFUSE;
         LightMap *firstlm = NULL;
-        loopv(lightmaps)
+        for( size_t i = 0; i < lightmaps.size(); ++i )
         {
             LightMap &lm = lightmaps[i];
             if(lm.tex >= 0 || (lm.type&flagmask) != flagval) continue;
@@ -2504,19 +2505,19 @@ void genlightmaptexs(int flagmask, int flagval)
             used++;
         }
         total -= oldval - remaining[type];
-        LightMapTexture &tex = lightmaptexs.add();
+        LightMapTexture &tex = (lightmaptexs.emplace_back(  ), lightmaptexs.back());
         tex.type = firstlm->type;
         tex.w = LM_PACKW<<((used+1)/2);
         tex.h = LM_PACKH<<(used/2);
         int bpp = firstlm->bpp;
         uchar *data = used ? new uchar[bpp*tex.w*tex.h] : NULL;
         int offsetx = 0, offsety = 0;
-        loopv(lightmaps)
+        for( size_t i = 0; i < lightmaps.size(); ++i )
         {
             LightMap &lm = lightmaps[i];
             if(lm.tex >= 0 || (lm.type&flagmask) != flagval || (lm.type&LM_TYPE) != type) continue;
 
-            lm.tex = lightmaptexs.length()-1;
+            lm.tex = lightmaptexs.size()-1;
             lm.offsetx = offsetx;
             lm.offsety = offsety;
             if(tex.unlitx < 0 && lm.unlitx >= 0)
@@ -2543,8 +2544,8 @@ bool brightengeom = false, shouldlightents = false;
 void clearlights()
 {
     clearlightcache();
-    const vector<extentity *> &ents = entities::getents();
-    loopv(ents)
+    const auto &ents = entities::getents();
+    for( size_t i = 0; i < ents.size(); ++i )
     {
         extentity &e = *ents[i];
         e.light.color = vec(1, 1, 1);
@@ -2575,8 +2576,8 @@ void lightents(bool force)
 {
     if(!force && !shouldlightents) return;
 
-    const vector<extentity *> &ents = entities::getents();
-    loopv(ents) lightent(*ents[i]);
+    const auto &ents = entities::getents();
+    for( size_t i = 0; i < ents.size(); ++i ) lightent(*ents[i]);
 
     shouldlightents = false;
 }
@@ -2627,10 +2628,10 @@ static inline void fastsunlight(const vec &o, float tolerance, uchar *slight, in
 {
     flags |= RAY_SHADOW;
     if(skytexturelight) flags |= RAY_SKIPSKY;
-    loopv(sunlights) if(sunlights[i])
+    for( size_t i = 0; i < sunlights.size(); ++i ) if(sunlights[i])
     {
         const extentity &light = *sunlights[i];
-        if(light.attrs.length() < 5 || (slight[0] >= light.attrs[2] && slight[1] >= light.attrs[3] && slight[2] >= light.attrs[4])) continue;
+        if(light.attrs.size() < 5 || (slight[0] >= light.attrs[2] && slight[1] >= light.attrs[3] && slight[2] >= light.attrs[4])) continue;
         int yaw = light.attrs[0], pitch = light.attrs[1]+90;
         vec dir(yaw*RAD, pitch*RAD);
         if(shadowray(vec(dir).mul(tolerance).add(o), dir, 1e16f, flags, t) > 1e15f)
@@ -2650,9 +2651,9 @@ void lightreaching(const vec &target, vec &color, vec &dir, bool fast, extentity
     }
 
     color = dir = vec(0, 0, 0);
-    const vector<extentity *> &ents = entities::getents();
-    const vector<int> &lights = checklightcache(int(target.x), int(target.y));
-    loopv(lights)
+    const auto &ents = entities::getents();
+    const std::vector<int> &lights = checklightcache(int(target.x), int(target.y));
+    for( size_t i = 0; i < lights.size(); ++i )
     {
         extentity &e = *ents[lights[i]];
         if(e.type != ET_LIGHT)
@@ -2679,16 +2680,16 @@ void lightreaching(const vec &target, vec &color, vec &dir, bool fast, extentity
         if(!e.links.empty())
         {
             int slight = -1;
-            const vector<extentity *> &ents = entities::getents();
-            loopvk(e.links)
+            const auto &ents = entities::getents();
+            for( size_t k = 0; k < e.links.size(); ++k )
             {
-                if(ents.inrange(e.links[k]) && ents[e.links[k]]->type == ET_LIGHTFX && ents[e.links[k]]->attrs[0] == LFX_SPOTLIGHT)
+                if(( 0 <= e.links[k] && e.links[k] < ents.size() ) && ents[e.links[k]]->type == ET_LIGHTFX && ents[e.links[k]]->attrs[0] == LFX_SPOTLIGHT)
                 {
                     slight = e.links[k];
                     break;
                 }
             }
-            if(ents.inrange(slight))
+            if(( 0 <= slight && slight < ents.size() ))
             {
                 extentity &spotlight = *ents[slight];
                 vec spot = vec(spotlight.o).sub(e.o).normalize();
@@ -2713,7 +2714,7 @@ void lightreaching(const vec &target, vec &color, vec &dir, bool fast, extentity
         loopk(3) slight[k] = max(skylight[k]/255.0f, ambient);
     }
     else loopk(3) slight[k] = max(ambientcolor[k]/255.0f, ambient);
-    if(sunlights.length() || entities::lastent(ET_SUNLIGHT))
+    if(sunlights.size() || entities::lastent(ET_SUNLIGHT))
     {
         if(sunlights.empty()) findsunlights();
         uchar col[3] = {0, 0, 0};
@@ -2728,11 +2729,11 @@ void lightreaching(const vec &target, vec &color, vec &dir, bool fast, extentity
 
 const extentity *brightestlight(const vec &target, const vec &dir)
 {
-    const vector<extentity *> &ents = entities::getents();
-    const vector<int> &lights = checklightcache(int(target.x), int(target.y));
+    const auto &ents = entities::getents();
+    const std::vector<int> &lights = checklightcache(int(target.x), int(target.y));
     const extentity *brightest = NULL;
     float bintensity = 0;
-    loopv(lights)
+    for( size_t i = 0; i < lights.size(); ++i )
     {
         const extentity &e = *ents[lights[i]];
         if(e.type != ET_LIGHT || vec(e.o).sub(target).dot(dir)<0)
@@ -2754,16 +2755,16 @@ const extentity *brightestlight(const vec &target, const vec &dir)
         if(!e.links.empty())
         {
             int slight = -1;
-            const vector<extentity *> &ents = entities::getents();
-            loopvk(e.links)
+            const auto &ents = entities::getents();
+            for( size_t k = 0; k < e.links.size(); ++k )
             {
-                if(ents.inrange(e.links[k]) && ents[e.links[k]]->type == ET_LIGHTFX && ents[e.links[k]]->attrs[0] == LFX_SPOTLIGHT)
+                if(( 0 <= e.links[k] && e.links[k] < ents.size() ) && ents[e.links[k]]->type == ET_LIGHTFX && ents[e.links[k]]->attrs[0] == LFX_SPOTLIGHT)
                 {
                     slight = e.links[k];
                     break;
                 }
             }
-            if(ents.inrange(slight))
+            if(( 0 <= slight && slight < ents.size() ))
             {
                 const extentity &spotlight = *ents[slight];
                 vec spot = vec(spotlight.o).sub(e.o).normalize();
@@ -2785,10 +2786,10 @@ const extentity *brightestlight(const vec &target, const vec &dir)
 
 void dumplms()
 {
-    loopv(lightmaps)
+    for( size_t i = 0; i < lightmaps.size(); ++i )
     {
         ImageData temp(LM_PACKW, LM_PACKH, lightmaps[i].bpp, lightmaps[i].data);
-        defformatstring(fname, "%s.lm%.4d", mapname, i);
+        defformatstring(fname, "%s.lm%.4zu", mapname, i);
         saveimage(fname, temp, imageformat, compresslevel, true);
     }
 }
