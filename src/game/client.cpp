@@ -1,3 +1,5 @@
+#include <vector>
+#include <string>
 #include <algorithm>
 using std::swap;
 #include "game.h"
@@ -33,7 +35,7 @@ namespace client
     int otherclients(bool self, bool nospec)
     {
         int n = self ? 1 : 0;
-        loopv(game::players) if(game::players[i] && game::players[i]->actortype == A_PLAYER && (!nospec || game::players[i]->state != CS_SPECTATOR)) n++;
+        for( size_t i = 0; i < game::players.size(); ++i ) if(game::players[i] && game::players[i]->actortype == A_PLAYER && (!nospec || game::players[i]->state != CS_SPECTATOR)) n++;
         return n;
     }
     ICOMMAND(0, getclientcount, "ii", (int *s, int *n), intret(otherclients(*s!=0, *n!=0)));
@@ -41,7 +43,7 @@ namespace client
     int numplayers()
     {
         int n = 1; // count ourselves
-        loopv(game::players) if(game::players[i] && game::players[i]->actortype < A_ENEMY) n++;
+        for( size_t i = 0; i < game::players.size(); ++i ) if(game::players[i] && game::players[i]->actortype < A_ENEMY) n++;
         return n;
     }
 
@@ -72,42 +74,47 @@ namespace client
     extern int sortvotes;
     struct mapvote
     {
-        vector<gameent *> players;
+        std::vector<gameent *> players;
         string map;
         int millis, mode, muts;
 
         mapvote() {}
-        ~mapvote() { players.shrink(0); }
+        ~mapvote() { players.clear(); }
 
         static bool compare(const mapvote &a, const mapvote &b)
         {
             if(sortvotes)
             {
-                if(a.players.length() > b.players.length()) return true;
-                if(a.players.length() < b.players.length()) return false;
+                if(a.players.size() > b.players.size()) return true;
+                if(a.players.size() < b.players.size()) return false;
             }
             return a.millis < b.millis;
         }
     };
-    vector<mapvote> mapvotes;
+    std::vector<mapvote> mapvotes;
 
-    VARF(IDF_PERSIST, sortvotes, 0, 0, 1, mapvotes.sort(mapvote::compare));
+    VARF(IDF_PERSIST, sortvotes, 0, 0, 1, std::sort( mapvotes.begin(), mapvotes.end(), mapvote::compare ));
     VARF(IDF_PERSIST, cleanvotes, 0, 0, 1, {
-        if(cleanvotes && !mapvotes.empty()) loopvrev(mapvotes) if(mapvotes[i].players.empty()) mapvotes.remove(i);
+        if(cleanvotes && !mapvotes.empty()) for( ssize_t i = mapvotes.size() - 1; i >= 0; --i ) if(mapvotes[i].players.empty()) mapvotes.erase( mapvotes.begin() + i );
     });
 
     void clearvotes(gameent *d, bool msg)
     {
         int found = 0;
-        loopvrev(mapvotes) if(mapvotes[i].players.find(d) >= 0)
+        for( ssize_t i = mapvotes.size() - 1; i >= 0; --i ) if(find( mapvotes[i].players, d ) >= 0)
         {
             found++;
-            mapvotes[i].players.removeobj(d);
-            if(cleanvotes && mapvotes[i].players.empty()) mapvotes.remove(i);
+            auto &players = mapvotes[i].players;
+            auto it = std::find( players.begin(), players.end(), d );
+            if( players.end() != it )
+            {
+                players.erase( it );
+            }
+            if(cleanvotes && mapvotes[i].players.empty()) mapvotes.erase( mapvotes.begin() + i );
         }
         if(found)
         {
-            if(!mapvotes.empty()) mapvotes.sort(mapvote::compare);
+            if(!mapvotes.empty()) std::sort( mapvotes.begin(), mapvotes.end(), mapvote::compare );
             if(msg && showmapvotes >= (d == game::player1 ? 2 : 3)) conoutft(CON_EVENT, "%s cleared their previous vote", game::colourname(d));
         }
     }
@@ -116,42 +123,47 @@ namespace client
     {
         mapvote *m = NULL;
         if(!text || !*text) text = "<random>";
-        if(!mapvotes.empty()) loopvrev(mapvotes)
+        if(!mapvotes.empty()) for( ssize_t i = mapvotes.size() - 1; i >= 0; --i )
         {
-            if(mapvotes[i].players.find(d) >= 0)
+            if(find( mapvotes[i].players, d ) >= 0)
             {
                 if(!strcmp(text, mapvotes[i].map) && mode == mapvotes[i].mode && muts == mapvotes[i].muts) return;
-                mapvotes[i].players.removeobj(d);
-                if(cleanvotes && mapvotes[i].players.empty()) mapvotes.remove(i);
+                auto & players = mapvotes[i].players;
+                auto it = std::find( players.begin(), players.end(), d );
+                if( players.end() != it )
+                {
+                    players.erase( it );
+                }
+                if(cleanvotes && mapvotes[i].players.empty()) mapvotes.erase( mapvotes.begin() + i );
             }
             if(!strcmp(text, mapvotes[i].map) && mode == mapvotes[i].mode && muts == mapvotes[i].muts) m = &mapvotes[i];
         }
         if(!m)
         {
-            m = &mapvotes.add();
+            m = &(mapvotes.emplace_back(  ),mapvotes.back());
             copystring(m->map, text);
             m->mode = mode;
             m->muts = muts;
             m->millis = totalmillis ? totalmillis : 1;
         }
-        m->players.add(d);
-        mapvotes.sort(mapvote::compare);
+        m->players.emplace_back( d );
+        std::sort( mapvotes.begin(), mapvotes.end(), mapvote::compare );
         if(showmapvotes >= (!gs_playing(game::gamestate) ? 2 : 1) && !isignored(d->clientnum))
             conoutft(CON_EVENT, "%s suggests: \fs\fy%s\fS on \fs\fo%s\fS, press \f{=showgui maps 2} to vote", game::colourname(d), server::gamename(mode, muts), m->map);
     }
 
     void getvotes(int vote, int prop, int idx)
     {
-        if(vote < 0) intret(mapvotes.length());
-        else if(mapvotes.inrange(vote))
+        if(vote < 0) intret(mapvotes.size());
+        else if(( 0 <= vote && vote < mapvotes.size() ))
         {
             mapvote &v = mapvotes[vote];
             if(prop < 0) intret(4);
             else switch(prop)
             {
                 case 0:
-                    if(idx < 0) intret(v.players.length());
-                    else if(v.players.inrange(idx)) intret(v.players[idx]->clientnum);
+                    if(idx < 0) intret(v.players.size());
+                    else if(( 0 <= idx && idx < v.players.size() )) intret(v.players[idx]->clientnum);
                     break;
                 case 1: intret(v.mode); break;
                 case 2: intret(v.muts); break;
@@ -166,22 +178,22 @@ namespace client
         demoheader hdr;
         string file;
     };
-    vector<demoinfo> demoinfos;
-    vector<char *> faildemos;
+    std::vector<demoinfo> demoinfos;
+    std::vector<char *> faildemos;
 
     int scandemo(const char *name)
     {
         if(!name || !*name) return -1;
-        loopv(demoinfos) if(!strcmp(demoinfos[i].file, name)) return i;
-        loopv(faildemos) if(!strcmp(faildemos[i], name)) return -1;
+        for( size_t i = 0; i < demoinfos.size(); ++i ) if(!strcmp(demoinfos[i].file, name)) return i;
+        for( size_t i = 0; i < faildemos.size(); ++i ) if(!strcmp(faildemos[i], name)) return -1;
         stream *f = opengzfile(name, "rb");
         if(!f)
         {
-            faildemos.add(newstring(name));
+            faildemos.emplace_back(newstring(name));
             return -1;
         }
-        int num = demoinfos.length();
-        demoinfo &d = demoinfos.add();
+        int num = demoinfos.size();
+        demoinfo &d = (demoinfos.emplace_back(  ), demoinfos.back());
         copystring(d.file, name);
         string msg = "";
         if(f->read(&d.hdr, sizeof(demoheader))!=sizeof(demoheader) || memcmp(d.hdr.magic, VERSION_DEMOMAGIC, sizeof(d.hdr.magic)))
@@ -196,8 +208,8 @@ namespace client
         if(msg[0])
         {
             conoutft(CON_INFO, "%s", msg);
-            demoinfos.pop();
-            faildemos.add(newstring(name));
+            demoinfos.pop_back();
+            faildemos.emplace_back(newstring(name));
             return -1;
         }
         return num;
@@ -206,19 +218,19 @@ namespace client
 
     void resetdemos(bool all)
     {
-        if(all) loopvrev(demoinfos) demoinfos.remove(i);
-        loopvrev(faildemos)
+        if(all) for( ssize_t i = demoinfos.size() - 1; i >= 0; --i ) demoinfos.erase( demoinfos.begin() + i );
+        for( ssize_t i = faildemos.size() - 1; i >= 0; --i )
         {
             DELETEA(faildemos[i]);
-            faildemos.remove(i);
+            faildemos.erase( faildemos.begin() + i );
         }
     }
     ICOMMAND(0, demoreset, "i", (int *all), resetdemos(*all!=0));
 
     void infodemo(int idx, int prop)
     {
-        if(idx < 0) intret(demoinfos.length());
-        else if(demoinfos.inrange(idx))
+        if(idx < 0) intret(demoinfos.size());
+        else if(( 0 <= idx && idx < demoinfos.size() ))
         {
             demoinfo &d = demoinfos[idx];
             switch(prop)
@@ -248,10 +260,10 @@ namespace client
         if(!name || !*name) name = "vars.cfg";
         stream *f = openfile(name, "w");
         if(!f) return;
-        vector<ident *> ids;
-        enumerate(idents, ident, id, ids.add(&id));
-        ids.sortname();
-        loopv(ids)
+        std::vector<ident *> ids;
+        enumerate(idents, ident, id, ids.emplace_back( &id ));
+        std::sort( ids.begin(), ids.end(), sortnameless() );
+        for( size_t i = 0; i < ids.size(); ++i )
         {
             ident &id = *ids[i];
             if(id.flags&IDF_CLIENT && !(id.flags&IDF_READONLY) && !(id.flags&IDF_WORLD)) switch(id.type)
@@ -296,10 +308,10 @@ namespace client
         if(!f) return;
         f->printf("// List of vars properties, fields are separated by tabs; empty if nonexistent\n");
         f->printf("// Fields: NAME TYPE FLAGS ARGS VALTYPE VALUE MIN MAX DESC USAGE\n");
-        vector<ident *> ids;
-        enumerate(idents, ident, id, ids.add(&id));
-        ids.sortname();
-        loopv(ids)
+        std::vector<ident *> ids;
+        enumerate(idents, ident, id, ids.emplace_back( &id ));
+        std::sort( ids.begin(), ids.end(), sortnameless() );
+        for( size_t i = 0; i < ids.size(); ++i )
         {
             ident &id = *ids[i];
             if(!(id.flags&IDF_SERVER)) // Exclude sv_* duplicates
@@ -351,7 +363,7 @@ namespace client
                 // empty if nonexistent
                 f->printf("\t%s", escapestring(id.desc ? id.desc : ""));
                 string fields = "";
-                loopvj(id.fields) concformatstring(fields, "%s%s", j ? " " : "", id.fields[j]);
+                for( size_t j = 0; j < id.fields.size(); ++j ) concformatstring(fields, "%s%s", j ? " " : "", id.fields[j]);
                 f->printf("\t%s", escapestring(*fields ? fields : ""));
                 f->printf("\n");
             }
@@ -382,7 +394,7 @@ namespace client
     }
     ICOMMAND(0, serversortreset, "", (), resetserversort());
 
-    vector<int> serversortstyles;
+    std::vector<int> serversortstyles;
     void updateserversort();
     SVARF(IDF_PERSIST, serversort, defaultserversort(),
     {
@@ -396,21 +408,20 @@ namespace client
 
     void updateserversort()
     {
-        vector<char *> styles;
+        std::vector<std::string> styles;
         explodelist(serversort, styles, SINFO_MAX);
-        serversortstyles.setsize(0);
-        loopv(styles) serversortstyles.add(parseint(styles[i]));
-        styles.deletearrays();
+        serversortstyles.clear();
+        for( size_t i = 0; i < styles.size(); ++i ) serversortstyles.emplace_back(parseint(styles[i].data()));
     }
 
     void getvitem(gameent *d, int n, int v)
     {
-        if(n < 0) intret(d->vitems.length());
+        if(n < 0) intret(d->vitems.size());
         else if(v < 0) intret(2);
-        else if(d->vitems.inrange(n)) switch(v)
+        else if(( 0 <= n && n < d->vitems.size() )) switch(v)
         {
             case 0: intret(d->vitems[n]); break;
-            case 1: if(vanities.inrange(d->vitems[n])) result(vanities[d->vitems[n]].ref); break;
+            case 1: if(( 0 <= d->vitems[n] && d->vitems[n] < vanities.size() )) result(vanities[d->vitems[n]].ref); break;
             default: break;
         }
     }
@@ -466,24 +477,25 @@ namespace client
 
     void setloadweap(const char *list)
     {
-        vector<int> items;
+        std::vector<int> items;
         if(list && *list)
         {
-            vector<char *> chunk;
-            explodelist(list, chunk);
-            loopv(chunk)
+            std::vector<std::string> chunks;
+            explodelist(list, chunks);
+            for( std::string const& chunk : chunks )
             {
-                if(!chunk[i] || !*chunk[i] || !isnumeric(*chunk[i])) continue;
-                int v = parseint(chunk[i]);
-                items.add(v >= W_OFFSET && v < W_ITEM ? v : 0);
+                if( isnumeric( chunk.front() ) )
+                {
+                    int v = parseint( chunk.data() );
+                    items.emplace_back( v >= W_OFFSET && v < W_ITEM ? v : 0 );
+                }
             }
-            chunk.deletearrays();
         }
-        game::player1->loadweap.shrink(0);
-        loopv(items) if(game::player1->loadweap.find(items[i]) < 0)
+        game::player1->loadweap.clear();
+        for( size_t i = 0; i < items.size(); ++i ) if(find( game::player1->loadweap, items[i] ) < 0)
         {
-            game::player1->loadweap.add(items[i]);
-            if(game::player1->loadweap.length() >= W_LOADOUT) break;
+            game::player1->loadweap.emplace_back( items[i] );
+            if(game::player1->loadweap.size() >= W_LOADOUT) break;
         }
         sendplayerinfo = true;
     }
@@ -491,31 +503,32 @@ namespace client
 
     void setrandweap(const char *list)
     {
-        vector<int> items;
+        std::vector<int> items;
         if(list && *list)
         {
-            vector<char *> chunk;
-            explodelist(list, chunk);
-            loopv(chunk)
+            std::vector<std::string> chunks;
+            explodelist(list, chunks);
+            for( std::string const& chunk : chunks )
             {
-                if(!chunk[i] || !*chunk[i] || !isnumeric(*chunk[i])) continue;
-                int v = parseint(chunk[i]);
-                items.add(v ? 1 : 0);
+                if( isnumeric( chunk.front() ) )
+                {
+                    int v = parseint( chunk.data() );
+                    items.emplace_back( v >= W_OFFSET && v < W_ITEM ? v : 0 );
+                }
             }
-            chunk.deletearrays();
         }
-        game::player1->randweap.shrink(0);
-        loopv(items)
+        game::player1->randweap.clear();
+        for( size_t i = 0; i < items.size(); ++i )
         {
-            game::player1->randweap.add(items[i]);
-            if(game::player1->randweap.length() >= W_LOADOUT) break;
+            game::player1->randweap.emplace_back( items[i] );
+            if(game::player1->randweap.size() >= W_LOADOUT) break;
         }
         sendplayerinfo = true;
     }
     SVARF(IDF_PERSIST, playerrandweap, "", setrandweap(playerrandweap));
 
-    ICOMMAND(0, getrandweap, "i", (int *n), intret(game::player1->randweap.inrange(*n) ? game::player1->randweap[*n] : 1));
-    ICOMMAND(0, getloadweap, "i", (int *n), intret(game::player1->loadweap.inrange(*n) ? game::player1->loadweap[*n] : -1));
+    ICOMMAND(0, getrandweap, "i", (int *n), intret(( 0 <= *n && *n < game::player1->randweap.size() ) ? game::player1->randweap[*n] : 1));
+    ICOMMAND(0, getloadweap, "i", (int *n), intret(( 0 <= *n && *n < game::player1->loadweap.size() ) ? game::player1->loadweap[*n] : -1));
     ICOMMAND(0, allowedweap, "i", (int *n), intret(isweap(*n) && m_check(W(*n, modes), W(*n, muts), game::gamemode, game::mutators) && !W(*n, disabled) ? 1 : 0));
     ICOMMAND(0, hasloadweap, "bb", (int *g, int *m), intret(m_loadout(m_game(*g) ? *g : game::gamemode, *m >= 0 ? *m : game::mutators) ? 1 : 0));
 
@@ -590,17 +603,17 @@ namespace client
         int n = strtol(arg, &end, 10);
         if(*arg && !*end)
         {
-            if(n!=game::player1->clientnum && !game::players.inrange(n)) return -1;
+            if(n!=game::player1->clientnum && !( 0 <= n && n < game::players.size() )) return -1;
             return n;
         }
         // try case sensitive first
-        loopv(game::players) if(game::players[i])
+        for( size_t i = 0; i < game::players.size(); ++i ) if(game::players[i])
         {
             gameent *o = game::players[i];
             if(!strcmp(arg, o->name)) return o->clientnum;
         }
         // nothing found, try case insensitive
-        loopv(game::players) if(game::players[i])
+        for( size_t i = 0; i < game::players.size(); ++i ) if(game::players[i])
         {
             gameent *o = game::players[i];
             if(!strcasecmp(arg, o->name)) return o->clientnum;
@@ -617,30 +630,30 @@ namespace client
 
     void listclients(bool local, int noai)
     {
-        vector<char> buf;
+        std::vector<char> buf;
         string cn;
         int numclients = 0;
         if(local)
         {
             formatstring(cn, "%d", game::player1->clientnum);
-            buf.put(cn, strlen(cn));
+            buf.insert( buf.end(), cn, cn + strlen(cn));
             numclients++;
         }
-        loopv(game::players) if(game::players[i] && (!noai || game::players[i]->actortype > (noai >= 2 ? A_PLAYER : A_BOT)))
+        for( size_t i = 0; i < game::players.size(); ++i ) if(game::players[i] && (!noai || game::players[i]->actortype > (noai >= 2 ? A_PLAYER : A_BOT)))
         {
             formatstring(cn, "%d", game::players[i]->clientnum);
-            if(numclients++) buf.add(' ');
-            buf.put(cn, strlen(cn));
+            if(numclients++) buf.emplace_back( ' ' );
+            buf.insert( buf.end(), cn, cn + strlen(cn));
         }
-        buf.add('\0');
-        result(buf.getbuf());
+        buf.emplace_back( '\0' );
+        result(buf.data());
     }
     ICOMMAND(0, listclients, "ii", (int *local, int *noai), listclients(*local!=0, *noai));
 
     void getlastclientnum()
     {
         int cn = game::player1->clientnum;
-        loopv(game::players) if(game::players[i] && game::players[i]->clientnum > cn) cn = game::players[i]->clientnum;
+        for( size_t i = 0; i < game::players.size(); ++i ) if(game::players[i] && game::players[i]->clientnum > cn) cn = game::players[i]->clientnum;
         intret(cn);
     }
     ICOMMAND(0, getlastclientnum, "", (), getlastclientnum());
@@ -725,7 +738,7 @@ namespace client
     int getclientloadweap(int cn, int n)
     {
         gameent *d = game::getclient(cn);
-        return d ? (d->loadweap.inrange(n) ? d->loadweap[n] : 0) : -1;
+        return d ? (( 0 <= n && n < d->loadweap.size() ) ? d->loadweap[n] : 0) : -1;
     }
     ICOMMAND(0, getclientloadweap, "si", (char *who, int *n), intret(getclientloadweap(parsewho(who), *n)));
 
@@ -918,7 +931,7 @@ namespace client
     ICOMMAND(0, clearlimits, "", (), addmsg(N_CLRCONTROL, "ri", ipinfo::LIMIT));
     ICOMMAND(0, clearexcepts, "", (), addmsg(N_CLRCONTROL, "ri", ipinfo::EXCEPT));
 
-    vector<char *> ignores;
+    std::vector<char *> ignores;
     void ignore(int cn)
     {
         gameent *d = game::getclient(cn);
@@ -928,10 +941,10 @@ namespace client
             conoutft(CON_EVENT, "\frcannot ignore %s: host information is private", game::colourname(d));
             return;
         }
-        if(ignores.find(d->hostip) < 0)
+        if(find( ignores, d->hostip ) < 0)
         {
             conoutft(CON_EVENT, "\fyignoring: \fs%s\fS (\fs\fc%s\fS)", game::colourname(d), d->hostip);
-            ignores.add(d->hostip);
+            ignores.emplace_back( d->hostip );
         }
         else
             conoutft(CON_EVENT, "\fralready ignoring: \fs%s\fS (\fs\fc%s\fS)", game::colourname(d), d->hostip);
@@ -946,20 +959,23 @@ namespace client
             conoutft(CON_EVENT, "\frcannot unignore %s: host information is private", game::colourname(d));
             return;
         }
-        if(ignores.find(d->hostip) >= 0)
+        auto it = std::find( ignores.begin(), ignores.end(), d->hostip );
+        if( ignores.end() != it )
         {
             conoutft(CON_EVENT, "\fystopped ignoring: \fs%s\fS (\fs\fc%s\fS)", game::colourname(d), d->hostip);
-            ignores.removeobj(d->hostip);
+            ignores.erase( it );
         }
         else
+        {
             conoutft(CON_EVENT, "\fryou are not ignoring: \fs%s\fS (\fs\fc%s\fS)", game::colourname(d), d->hostip);
+        }
     }
 
     bool isignored(int cn)
     {
         gameent *d = game::getclient(cn);
         if(!d || !strcmp(d->hostip, "*")) return false;
-        return ignores.find(d->hostip) >= 0;
+        return find( ignores, d->hostip ) >= 0;
     }
 
     ICOMMAND(0, ignore, "s", (char *arg), ignore(parseplayer(arg)));
@@ -1044,8 +1060,8 @@ namespace client
         if(editmode) toggleedit();
         remote = isready = sendplayerinfo = sendgameinfo = sendcrcinfo = false;
         gettingmap = needsmap = sessionid = sessionver = lastplayerinfo = mastermode = 0;
-        messages.shrink(0);
-        mapvotes.shrink(0);
+        messages.clear();
+        mapvotes.clear();
         messagereliable = false;
         projs::remove(game::player1);
         removetrackedparticles(game::player1);
@@ -1055,8 +1071,8 @@ namespace client
         game::player1->handle[0] = '\0';
         game::gamemode = G_EDITMODE;
         game::mutators = game::maptime = 0;
-        loopv(game::players) if(game::players[i]) game::clientdisconnected(i);
-        game::waiting.setsize(0);
+        for( size_t i = 0; i < game::players.size(); ++i ) if(game::players[i]) game::clientdisconnected(i);
+        game::waiting.clear();
         hud::cleanup();
         emptymap(0, true, NULL, true);
         smartmusic(true);
@@ -1128,7 +1144,7 @@ namespace client
         int num = nums?0:numi, msgsize = msgsizelookup(type);
         if(msgsize && num!=msgsize) { fatal("inconsistent msg size for %d (%d != %d)", type, num, msgsize); }
         if(reliable) messagereliable = true;
-        messages.put(buf, p.length());
+        messages.put(buf, p.size());
         return true;
     }
 
@@ -1294,7 +1310,7 @@ namespace client
         game::timeremaining = -1;
         game::maptime = 0;
         hud::resetscores();
-        mapvotes.shrink(0);
+        mapvotes.clear();
         if(editmode) toggleedit();
         if(m_demo(game::gamemode))
         {
@@ -1340,8 +1356,8 @@ namespace client
                 int ctime = getint(p);
                 int nameid = getint(p);
                 if(filetimelocal) ctime += clockoffset;
-                data += p.length();
-                len -= p.length();
+                data += p.size();
+                len -= p.size();
                 string fname;
                 const char *demoname = demonames.find(nameid, "");
                 if(*demoname)
@@ -1368,8 +1384,8 @@ namespace client
                 string fname;
                 gettingmap = totalmillis;
                 getstring(fname, p);
-                data += p.length();
-                len -= p.length();
+                data += p.size();
+                len -= p.size();
                 if(filetype < 0 || filetype >= SENDMAP_MAX || len <= 0) break;
                 if(!*fname) copystring(fname, "maps/untitled");
                 defformatstring(ffile, strstr(fname, "maps/")==fname || strstr(fname, "maps\\")==fname ? "%s_0x%.8x" : "maps/%s_0x%.8x", fname, filecrc);
@@ -1600,10 +1616,10 @@ namespace client
                     sel.cx, sel.cxs, sel.cy, sel.cys, sel.corner,
                     tex1 ? tex1 : arg1, arg2))
                 {
-                    messages.pad(2);
-                    int offset = messages.length();
+                    messages.resize( 2 );
+                    int offset = messages.size();
                     if(tex1) packvslot(messages, arg1);
-                    *(ushort *)&messages[offset-2] = lilswap(ushort(messages.length() - offset));
+                    *(ushort *)&messages[offset-2] = lilswap(ushort(messages.size() - offset));
                 }
                 break;
             }
@@ -1615,11 +1631,11 @@ namespace client
                     sel.cx, sel.cxs, sel.cy, sel.cys, sel.corner,
                     tex1 ? tex1 : arg1, tex2 ? tex2 : arg2, arg3))
                 {
-                    messages.pad(2);
-                    int offset = messages.length();
+                    messages.resize( 2 );
+                    int offset = messages.size();
                     if(tex1) packvslot(messages, arg1);
                     if(tex2) packvslot(messages, arg2);
-                    *(ushort *)&messages[offset-2] = lilswap(ushort(messages.length() - offset));
+                    *(ushort *)&messages[offset-2] = lilswap(ushort(messages.size() - offset));
                 }
                 break;
             }
@@ -1635,10 +1651,10 @@ namespace client
                     sel.cx, sel.cxs, sel.cy, sel.cys, sel.corner,
                     arg1, arg2))
                 {
-                    messages.pad(2);
-                    int offset = messages.length();
+                    messages.resize( 2 );
+                    int offset = messages.size();
                     packvslot(messages, vs);
-                    *(ushort *)&messages[offset-2] = lilswap(ushort(messages.length() - offset));
+                    *(ushort *)&messages[offset-2] = lilswap(ushort(messages.size() - offset));
                 }
                 break;
             }
@@ -1667,10 +1683,10 @@ namespace client
         putint(p, game::player1->colour);
         putint(p, game::player1->model);
         sendstring(game::player1->vanity, p);
-        putint(p, game::player1->loadweap.length());
-        loopv(game::player1->loadweap) putint(p, game::player1->loadweap[i]);
-        putint(p, game::player1->randweap.length());
-        loopv(game::player1->randweap) putint(p, game::player1->randweap[i]);
+        putint(p, game::player1->loadweap.size());
+        for( size_t i = 0; i < game::player1->loadweap.size(); ++i ) putint(p, game::player1->loadweap[i]);
+        putint(p, game::player1->randweap.size());
+        for( size_t i = 0; i < game::player1->randweap.size(); ++i ) putint(p, game::player1->randweap[i]);
 
         string hash = "";
         if(connectpass[0])
@@ -1801,10 +1817,10 @@ namespace client
                 putint(p, game::player1->model);
                 putint(p, game::player1->checkpointspawn);
                 sendstring(game::player1->vanity, p);
-                putint(p, game::player1->loadweap.length());
-                loopv(game::player1->loadweap) putint(p, game::player1->loadweap[i]);
-                putint(p, game::player1->randweap.length());
-                loopv(game::player1->randweap) putint(p, game::player1->randweap[i]);
+                putint(p, game::player1->loadweap.size());
+                for( size_t i = 0; i < game::player1->loadweap.size(); ++i ) putint(p, game::player1->loadweap[i]);
+                putint(p, game::player1->randweap.size());
+                for( size_t i = 0; i < game::player1->randweap.size(); ++i ) putint(p, game::player1->randweap[i]);
             }
             if(sendcrcinfo)
             {
@@ -1854,10 +1870,10 @@ namespace client
                 needsmap = totalmillis;
             }
         }
-        if(messages.length())
+        if(messages.size())
         {
-            p.put(messages.getbuf(), messages.length());
-            messages.setsize(0);
+            p.put(messages.data(), messages.size());
+            messages.clear();
             if(messagereliable) p.reliable();
             messagereliable = false;
         }
@@ -2241,10 +2257,10 @@ namespace client
                     getstring(vanity, p);
                     int lw = getint(p);
                     vector<int> lweaps;
-                    loopk(lw) lweaps.add(getint(p));
+                    loopk(lw) lweaps.emplace_back(getint(p));
                     int rw = getint(p);
                     vector<int> rweaps;
-                    loopk(rw) rweaps.add(getint(p));
+                    loopk(rw) rweaps.emplace_back(getint(p));
                     if(!d) break;
                     string namestr = "";
                     filterstring(namestr, text, true, true, true, true, MAXNAMELEN);
@@ -2286,11 +2302,10 @@ namespace client
                     string vanity = "";
                     getstring(vanity, p);
                     int lw = getint(p);
-                    vector<int> lweaps;
-                    loopk(lw) lweaps.add(getint(p));
+                    vector<int> lweaps, rweaps;
+                    loopk(lw) lweaps.emplace_back(getint(p));
                     int rw = getint(p);
-                    vector<int> rweaps;
-                    loopk(rw) rweaps.add(getint(p));
+                    loopk(rw) rweaps.emplace_back(getint(p));
                     getstring(d->handle, p);
                     getstring(text, p); // TODO proto 231
                     getstring(d->hostip, p);
@@ -2374,7 +2389,7 @@ namespace client
                     vector<shotmsg> shots;
                     loopj(ls)
                     {
-                        shotmsg &s = shots.add();
+                        shotmsg &s = (shots.emplace_back(  ), shots.back());
                         s.id = getint(p);
                         loopk(3) s.pos[k] = getint(p);
                     }
@@ -2459,13 +2474,13 @@ namespace client
                 {
                     int vcn = getint(p), deaths = getint(p), tdeaths = getint(p), acn = getint(p), frags = getint(p), tfrags = getint(p), spree = getint(p), style = getint(p), weap = getint(p), flags = getint(p), damage = getint(p), material = getint(p);
                     gameent *m = game::getclient(vcn), *v = game::getclient(acn);
-                    static vector<gameent *> assist; assist.setsize(0);
+                    static vector<gameent *> assist; assist.clear();
                     int count = getint(p);
                     loopi(count)
                     {
                         int lcn = getint(p);
                         gameent *log = game::getclient(lcn);
-                        if(log) assist.add(log);
+                        if(log) assist.emplace_back( log );
                     }
                     if(!v || !m) break;
                     m->deaths = deaths;
@@ -2548,7 +2563,7 @@ namespace client
                 case N_ITEMSPAWN:
                 {
                     int ent = getint(p), value = getint(p);
-                    if(!entities::ents.inrange(ent)) break;
+                    if(!( 0 <= ent && ent < entities::ents.size() )) break;
                     gameentity &e = *(gameentity *)entities::ents[ent];
                     entities::setspawn(ent, value);
                     ai::itemspawned(ent, value!=0);
@@ -2592,7 +2607,7 @@ namespace client
                         weap = getint(p), drop = getint(p), ammo = getint(p);
                     gameent *m = game::getclient(lcn);
                     if(!m) break;
-                    if(entities::ents.inrange(ent) && enttype[entities::ents[ent]->type].usetype == EU_ITEM)
+                    if(( 0 <= ent && ent < entities::ents.size() ) && enttype[entities::ents[ent]->type].usetype == EU_ITEM)
                         entities::useeffects(m, ent, ammoamt, spawn, weap, drop, ammo);
                     break;
                 }
@@ -2764,7 +2779,7 @@ namespace client
                     loopk(numattrs)
                     {
                         int val = getint(p);
-                        if(attrs.inrange(k)) attrs[k] = val;
+                        if(( 0 <= k && k < attrs.size() )) attrs[k] = val;
                     }
                     mpeditent(i, vec(x, y, z), type, attrs, false);
                     entities::setspawn(i, 0);
@@ -2786,7 +2801,7 @@ namespace client
                 case N_CLIENTPING:
                     if(!d) return;
                     d->ping = getint(p);
-                    loopv(game::players) if(game::players[i] && game::players[i]->ownernum == d->clientnum)
+                    for( size_t i = 0; i < game::players.size(); ++i ) if(game::players[i] && game::players[i]->ownernum == d->clientnum)
                         game::players[i]->ping = d->ping;
                     break;
 
@@ -2841,7 +2856,7 @@ namespace client
                     bool wasdemopb = demoplayback;
                     demoplayback = getint(p)!=0;
                     if(demoplayback) game::player1->state = CS_SPECTATOR;
-                    else loopv(game::players) if(game::players[i]) game::clientdisconnected(i);
+                    else for( size_t i = 0; i < game::players.size(); ++i ) if(game::players[i]) game::clientdisconnected(i);
                     game::player1->clientnum = getint(p);
                     if(!demoplayback && wasdemopb && demoendless)
                     {
@@ -2854,17 +2869,17 @@ namespace client
                         }
                         if(!*demofile)
                         {
-                            vector<char *> files;
+                            std::vector<std::string> files;
                             listfiles("demos", "dmo", files);
                             while(!files.empty())
                             {
-                                int r = rnd(files.length());
+                                int r = rnd(files.size());
                                 if(files[r][0] != '.')
                                 {
-                                    copystring(demofile, files[r]);
+                                    copystring(demofile, files[r].data() );
                                     break;
                                 }
-                                else files.remove(r);
+                                else files.erase( files.begin() + r );
                             }
                         }
                         if(*demofile) addmsg(N_MAPVOTE, "rsi2", demofile, G_DEMO, 0);
@@ -2931,7 +2946,11 @@ namespace client
                         {
                             s->state = CS_WAITING;
                             if(s != game::player1 && !s->ai) s->resetinterp();
-                            game::waiting.removeobj(s);
+                            auto it = std::find( game::waiting.begin(), game::waiting.end(), s );
+                            if( game::waiting.end() != it )
+                            {
+                                game::waiting.erase( it );
+                            }
                         }
                         s->quarantine = false;
                     }
@@ -2948,13 +2967,17 @@ namespace client
                         if(editmode) toggleedit();
                         hud::showscores(false);
                         s->stopmoving(true);
-                        game::waiting.setsize(0);
+                        game::waiting.clear();
                         gameent *d;
-                        loopv(game::players) if((d = game::players[i]) && d->actortype == A_PLAYER && d->state == CS_WAITING)
-                            game::waiting.add(d);
+                        for( size_t i = 0; i < game::players.size(); ++i ) if((d = game::players[i]) && d->actortype == A_PLAYER && d->state == CS_WAITING)
+                            game::waiting.emplace_back( d );
                     }
                     else if(!s->ai) s->resetinterp();
-                    game::waiting.removeobj(s);
+                    auto it = std::find( game::waiting.begin(), game::waiting.end(), s );
+                    if( game::waiting.end() != it )
+                    {
+                        game::waiting.erase( it );
+                    }
                     if(s->state == CS_ALIVE) s->lastdeath = lastmillis; // so spawn delay shows properly
                     else entities::spawnplayer(s); // so they're not nowhere
                     s->state = CS_WAITING;
@@ -3026,7 +3049,7 @@ namespace client
                     }
                     if(ent >= 0)
                     {
-                        if(entities::ents.inrange(ent) && entities::ents[ent]->type == CHECKPOINT)
+                        if(( 0 <= ent && ent < entities::ents.size() ) && entities::ents[ent]->type == CHECKPOINT)
                         {
                             if(t != game::player1 && !t->ai && (!t->cpmillis || entities::ents[ent]->attrs[6] == CP_START)) t->cpmillis = lastmillis;
                             if((checkpointannounce&(t != game::focus ? 2 : 1) || (m_ra_gauntlet(game::gamemode, game::mutators) && checkpointannounce&4)) && checkpointannouncefilter&(1<<entities::ents[ent]->attrs[6]))
@@ -3164,7 +3187,7 @@ namespace client
                     getstring(text, p);
                     if(size >= 0) emptymap(size, true, text);
                     else enlargemap(size == -2, true);
-                    mapvotes.shrink(0);
+                    mapvotes.clear();
                     needsmap = 0;
                     if(d)
                     {
@@ -3200,7 +3223,7 @@ namespace client
                         conoutf("identifying as: \fs\fc%s\fS (\fs\fy%u\fS)", accountname, id);
                         vector<char> buf;
                         answerchallenge(accountpass, text, buf);
-                        addmsg(N_AUTHANS, "ris", id, buf.getbuf());
+                        addmsg(N_AUTHANS, "ris", id, buf.data());
                     }
                     break;
                 }
@@ -3232,11 +3255,11 @@ namespace client
 
     int serverstat(serverinfo *a)
     {
-        if(a->attr.length() > 4 && a->numplayers >= a->attr[4])
+        if(a->attr.size() > 4 && a->numplayers >= a->attr[4])
         {
             return SSTAT_FULL;
         }
-        else if(a->attr.length() > 5) switch(a->attr[5])
+        else if(a->attr.size() > 5) switch(a->attr[5])
         {
             case MM_LOCKED:
             {
@@ -3276,7 +3299,7 @@ namespace client
         }
 
         if(serversortstyles.empty()) updateserversort();
-        loopv(serversortstyles)
+        for( size_t i = 0; i < serversortstyles.size(); ++i )
         {
             int style = serversortstyles[i];
             serverinfo *aa = a, *ab = b;
@@ -3301,20 +3324,20 @@ namespace client
                 }
                 case SINFO_MODE:
                 {
-                    if(aa->attr.length() > 1) ac = aa->attr[1];
+                    if(aa->attr.size() > 1) ac = aa->attr[1];
                     else ac = 0;
 
-                    if(ab->attr.length() > 1) bc = ab->attr[1];
+                    if(ab->attr.size() > 1) bc = ab->attr[1];
                     else bc = 0;
 
                     retsw(ac, bc, true);
                 }
                 case SINFO_MUTS:
                 {
-                    if(aa->attr.length() > 2) ac = aa->attr[2];
+                    if(aa->attr.size() > 2) ac = aa->attr[2];
                     else ac = 0;
 
-                    if(ab->attr.length() > 2) bc = ab->attr[2];
+                    if(ab->attr.size() > 2) bc = ab->attr[2];
                     else bc = 0;
 
                     retsw(ac, bc, true);
@@ -3327,10 +3350,10 @@ namespace client
                 }
                 case SINFO_TIME:
                 {
-                    if(aa->attr.length() > 3) ac = aa->attr[3];
+                    if(aa->attr.size() > 3) ac = aa->attr[3];
                     else ac = 0;
 
-                    if(ab->attr.length() > 3) bc = ab->attr[3];
+                    if(ab->attr.size() > 3) bc = ab->attr[3];
                     else bc = 0;
 
                     retsw(ac, bc, false);
@@ -3343,10 +3366,10 @@ namespace client
                 }
                 case SINFO_MAXPLRS:
                 {
-                    if(aa->attr.length() > 4) ac = aa->attr[4];
+                    if(aa->attr.size() > 4) ac = aa->attr[4];
                     else ac = 0;
 
-                    if(ab->attr.length() > 4) bc = ab->attr[4];
+                    if(ab->attr.size() > 4) bc = ab->attr[4];
                     else bc = 0;
 
                     retsw(ac, bc, false);
@@ -3389,8 +3412,8 @@ namespace client
 
     void getservers(int server, int prop, int idx)
     {
-        if(server < 0) intret(servers.length());
-        else if(servers.inrange(server))
+        if(server < 0) intret(servers.size());
+        else if(( 0 <= server && server < servers.size() ))
         {
             serverinfo *si = servers[server];
             if(prop < 0) intret(4);
@@ -3415,16 +3438,16 @@ namespace client
                     }
                     break;
                 case 1:
-                    if(idx < 0) intret(si->attr.length());
-                    else if(si->attr.inrange(idx)) intret(si->attr[idx]);
+                    if(idx < 0) intret(si->attr.size());
+                    else if(( 0 <= idx && idx < si->attr.size() )) intret(si->attr[idx]);
                     break;
                 case 2:
-                    if(idx < 0) intret(si->players.length());
-                    else if(si->players.inrange(idx)) result(si->players[idx]);
+                    if(idx < 0) intret(si->players.size());
+                    else if(( 0 <= idx && idx < si->players.size() )) result(si->players[idx]);
                     break;
                 case 3:
-                    if(idx < 0) intret(si->handles.length());
-                    else if(si->handles.inrange(idx)) result(si->handles[idx]);
+                    if(idx < 0) intret(si->handles.size());
+                    else if(( 0 <= idx && idx < si->handles.size() )) result(si->handles[idx]);
                     break;
             }
         }
