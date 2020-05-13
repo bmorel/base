@@ -1,3 +1,4 @@
+#include <vector>
 #include <algorithm>
 using std::swap;
 
@@ -234,7 +235,7 @@ void genmatsurfs(const cube &c, const ivec &co, int size, vector<materialsurface
                 m.o = co;
                 m.csize = m.rsize = size;
                 if(dimcoord(i)) m.o[dimension(i)] += size;
-                matsurfs.add(m);
+                (matsurfs.emplace_back( m ), matsurfs.back());
                 break;
             }
         }
@@ -359,9 +360,9 @@ struct waterinfo
 void setupmaterials(int start, int len)
 {
     int hasmat = 0;
-    vector<waterinfo> water;
+    std::vector<waterinfo> water;
     unionfind uf;
-    if(!len) len = valist.length();
+    if(!len) len = valist.size();
     for(int i = start; i < len; i++)
     {
         vtxarray *va = valist[i];
@@ -372,8 +373,8 @@ void setupmaterials(int start, int len)
             int matvol = m.material&MATF_VOLUME;
             if(matvol==MAT_WATER && m.orient==O_TOP)
             {
-                m.index = water.length();
-                loopvk(water)
+                m.index = water.size();
+                for( size_t k = 0; k < water.size(); ++k )
                 {
                     materialsurface &n = *water[k].m;
                     if(m.material!=n.material || m.o.z!=n.o.z) continue;
@@ -386,7 +387,7 @@ void setupmaterials(int start, int len)
                         if(n.o.x+n.rsize>m.o.x && n.o.x<m.o.x+m.rsize) uf.unite(m.index, n.index);
                     }
                 }
-                waterinfo &wi = water.add();
+                waterinfo &wi = (water.emplace_back(  ), water.back());
                 wi.m = &m;
                 vec center(m.o.x+m.rsize/2, m.o.y+m.csize/2, m.o.z-WATER_OFFSET);
                 m.light = brightestlight(center, vec(0, 0, 1));
@@ -436,7 +437,7 @@ void setupmaterials(int start, int len)
                 skip = &m;
         }
     }
-    loopv(water)
+    for( size_t i = 0; i < water.size(); ++i )
     {
         int root = uf.find(i);
         if(i==root) continue;
@@ -445,7 +446,7 @@ void setupmaterials(int start, int len)
         water[root].depth += water[i].depth;
         water[root].area += water[i].area;
     }
-    loopv(water)
+    for( size_t i = 0; i < water.size(); ++i )
     {
         int root = uf.find(i);
         water[i].m->light = water[root].m->light;
@@ -506,7 +507,7 @@ static inline bool vismatcmp(const materialsurface *xm, const materialsurface *y
     return false;
 }
 
-void sortmaterials(vector<materialsurface *> &vismats)
+void sortmaterials(std::vector<materialsurface *> &vismats)
 {
     sortorigin = ivec(camera1->o);
     if(reflecting) sortorigin.z = int(reflectz - (camera1->o.z - reflectz));
@@ -531,19 +532,19 @@ void sortmaterials(vector<materialsurface *> &vismats)
                 if(glaring && matvol!=MAT_LAVA) { i += m.skip; continue; }
             }
             else if(glaring) continue;
-            vismats.add(&m);
+            (vismats.emplace_back( &m ), vismats.back());
         }
     }
     sortedit = editmode && showmat && !drawtex;
-    vismats.sort(vismatcmp);
+    std::sort( vismats.begin(), vismats.end(), vismatcmp );
 }
 
-void rendermatgrid(vector<materialsurface *> &vismats)
+void rendermatgrid(std::vector<materialsurface *> &vismats)
 {
     enablepolygonoffset(GL_POLYGON_OFFSET_LINE);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     int lastmat = -1;
-    loopvrev(vismats)
+    for( ssize_t i = vismats.size() - 1; i >= 0; --i )
     {
         materialsurface &m = *vismats[i];
         if(m.material != lastmat)
@@ -631,7 +632,7 @@ VARF(IDF_PERSIST, waterfallenv, 0, 1, 1, preloadwatershaders());
 
 void rendermaterials()
 {
-    vector<materialsurface *> vismats;
+    std::vector<materialsurface *> vismats;
     sortmaterials(vismats);
     if(vismats.empty()) return;
 
@@ -660,7 +661,7 @@ void rendermaterials()
         glEnable(GL_BLEND); blended = true;
         foggednotextureshader->set();
         zerofogcolor(); lastfogtype = 0;
-        loopv(vismats)
+        for( size_t i = 0; i < vismats.size(); ++i )
         {
             const materialsurface &m = *vismats[i];
             if(lastmat!=m.material)
@@ -687,7 +688,7 @@ void rendermaterials()
             drawmaterial(m, -0.1f);
         }
     }
-    else loopv(vismats)
+    else for( size_t i = 0; i < vismats.size(); ++i )
     {
         const materialsurface &m = *vismats[i];
         int matvol = m.material&~MATF_INDEX;
@@ -700,7 +701,7 @@ void rendermaterials()
                     if(m.orient == O_TOP) continue;
                     if(lastmat == m.material) break;
                     mslot = &lookupmaterialslot(m.material, false);
-                    if(!mslot->loaded || !mslot->sts.inrange(1)) continue;
+                    if(!mslot->loaded || !( 0 <= 1 && 1 < mslot->sts.size() )) continue;
                     else
                     {
                         xtraverts += gle::end();
@@ -763,14 +764,14 @@ void rendermaterials()
 
                             if(usedwaterfall != m.material)
                             {
-                                Texture *dudv = mslot->sts.inrange(5) ? mslot->sts[5].t : notexture;
+                                Texture *dudv = ( 0 <= 5 && 5 < mslot->sts.size() ) ? mslot->sts[5].t : notexture;
                                 float scale = 8.0f/(dudv->ys*mslot->scale);
                                 LOCALPARAMF(dudvoffset, 0, scale*16*lastmillis/1000.0f);
 
                                 glActiveTexture_(GL_TEXTURE1);
-                                glBindTexture(GL_TEXTURE_2D, mslot->sts.inrange(4) ? mslot->sts[4].t->id : notexture->id);
+                                glBindTexture(GL_TEXTURE_2D, ( 0 <= 4 && 4 < mslot->sts.size() ) ? mslot->sts[4].t->id : notexture->id);
                                 glActiveTexture_(GL_TEXTURE2);
-                                glBindTexture(GL_TEXTURE_2D, mslot->sts.inrange(5) ? mslot->sts[5].t->id : notexture->id);
+                                glBindTexture(GL_TEXTURE_2D, ( 0 <= 5 && 5 < mslot->sts.size() ) ? mslot->sts[5].t->id : notexture->id);
                                 if(waterfallenv)
                                 {
                                     glActiveTexture_(GL_TEXTURE3);
@@ -797,7 +798,7 @@ void rendermaterials()
                     else
                     {
                         int subslot = m.orient==O_TOP ? 0 : 1;
-                        if(!mslot->sts.inrange(subslot)) continue;
+                        if(!( 0 <= subslot && subslot < mslot->sts.size() )) continue;
                         xtraverts += gle::end();
                         glBindTexture(GL_TEXTURE_2D, mslot->sts[subslot].t->id);
                     }
