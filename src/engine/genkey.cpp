@@ -1,3 +1,4 @@
+#include <vector>
 #include <algorithm>
 using std::swap;
 
@@ -16,8 +17,8 @@ int main(int argc, char **argv)
     {
         vector<char> privkey, pubkey;
         genprivkey(argv[1], privkey, pubkey);
-        printf("private key: %s\n", privkey.getbuf());
-        printf("public key: %s\n", pubkey.getbuf());
+        printf("private key: %s\n", privkey.data());
+        printf("public key: %s\n", pubkey.data());
         return EXIT_SUCCESS;
     }
     //Print yes/no to match pubkey with privkey: genkey <pubkey> <privkey>
@@ -25,7 +26,7 @@ int main(int argc, char **argv)
     {
         vector<char> pubkey;
         genpubkey(argv[2], pubkey);
-        printf("%s\n", !strcmp(argv[1], pubkey.getbuf()) ? "yes" : "no");
+        printf("%s\n", !strcmp(argv[1], pubkey.data()) ? "yes" : "no");
         return EXIT_SUCCESS;
     }
     return EXIT_FAILURE;
