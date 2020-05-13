@@ -1,3 +1,4 @@
+#include <vector>
 // physics.cpp: no physics books were hurt nor consulted in the construction of this code.
 // All physics computations and constants were invented on the fly and simply tweaked until
 // they "felt right", and have no basis in reality. Collision detection is simplistic but
@@ -147,10 +148,10 @@ static float disttoent(octaentities *oc, const vec &o, const vec &ray, float rad
     vec eo, es;
     int orient = -1;
     float dist = radius, f = 0.0f;
-    const vector<extentity *> &ents = entities::getents();
+    const auto &ents = entities::getents();
 
     #define entintersect(mask, type, func) {\
-        if((mode&(mask))==(mask)) loopv(oc->type) \
+        if((mode&(mask))==(mask)) for( size_t i = 0; i < oc->type.size(); ++i ) \
         { \
             int n = oc->type[i]; \
             extentity &e = *ents[n]; \
@@ -191,8 +192,8 @@ static float disttooutsideent(const vec &o, const vec &ray, float radius, int mo
     vec eo, es;
     int orient;
     float dist = radius, f = 0.0f;
-    const vector<extentity *> &ents = entities::getents();
-    loopv(outsideents)
+    const auto &ents = entities::getents();
+    for( size_t i = 0; i < outsideents.size(); ++i )
     {
         extentity &e = *ents[outsideents[i]];
         if(!(e.flags&EF_OCTA) || &e == t) continue;
@@ -212,8 +213,8 @@ static float disttooutsideent(const vec &o, const vec &ray, float radius, int mo
 static float shadowent(octaentities *oc, const vec &o, const vec &ray, float radius, int mode, extentity *t)
 {
     float dist = radius, f = 0.0f;
-    const vector<extentity *> &ents = entities::getents();
-    loopv(oc->mapmodels)
+    const auto &ents = entities::getents();
+    for( size_t i = 0; i < oc->mapmodels.size(); ++i )
     {
         extentity &e = *ents[oc->mapmodels[i]];
         if(!(e.flags&EF_OCTA) || &e==t) continue;
@@ -620,7 +621,7 @@ const vector<physent *> &checkdynentcache(int x, int y)
     dec.x = x;
     dec.y = y;
     dec.frame = dynentframe;
-    dec.dynents.setsize(0);
+    dec.dynents.clear();
     int numdyns = game::numdynents(true), dsize = 1<<dynentsize, dx = x<<dynentsize, dy = y<<dynentsize;
     loopi(numdyns)
     {
@@ -629,7 +630,7 @@ const vector<physent *> &checkdynentcache(int x, int y)
             d->o.x+d->radius <= dx || d->o.x-d->radius >= dx+dsize ||
             d->o.y+d->radius <= dy || d->o.y-d->radius >= dy+dsize)
             continue;
-        dec.dynents.add(d);
+        dec.dynents.emplace_back(d);
     }
     return dec.dynents;
 }
@@ -655,8 +656,8 @@ bool overlapsdynent(const vec &o, float radius)
 {
     loopdynentcache(x, y, o, radius)
     {
-        const vector<physent *> &dynents = checkdynentcache(x, y);
-        loopv(dynents)
+        const auto &dynents = checkdynentcache(x, y);
+        for( size_t i = 0; i < dynents.size(); ++i )
         {
             physent *d = dynents[i];
             if(physics::issolid(d) && o.dist(d->o)-d->radius < radius)
@@ -705,8 +706,8 @@ bool plcollide(physent *d, const vec &dir, bool insideplayercol)  // collide wit
     physent *insideplayer = NULL;
     loopdynentcache(x, y, d->o, d->radius)
     {
-        const vector<physent *> &dynents = checkdynentcache(x, y);
-        loopv(dynents)
+        const auto &dynents = checkdynentcache(x, y);
+        for( size_t i = 0; i < dynents.size(); ++i )
         {
             physent *o = dynents[i];
             if(o==d || !physics::issolid(o, d)) continue;
@@ -870,8 +871,8 @@ static bool fuzzycollideellipse(physent *d, const vec &dir, float cutoff, const 
 bool mmcollide(physent *d, const vec &dir, float cutoff, octaentities &oc) // collide with a mapmodel
 {
     if(d->type == ENT_CAMERA) return false;
-    const vector<extentity *> &ents = entities::getents();
-    loopv(oc.mapmodels)
+    const auto &ents = entities::getents();
+    for( size_t i = 0; i < oc.mapmodels.size(); ++i )
     {
         extentity &e = *ents[oc.mapmodels[i]];
         mapmodelskip;
@@ -1207,8 +1208,8 @@ float pltracecollide(physent *d, const vec &from, const vec &ray, float maxdist)
     float bestdist = 1e16f; int bestflags = HITFLAG_NONE;
     loopdynentcachebb(x, y, x1, y1, x2, y2)
     {
-        const vector<physent *> &dynents = checkdynentcache(x, y);
-        loopv(dynents)
+        const auto &dynents = checkdynentcache(x, y);
+        for( size_t i = 0; i < dynents.size(); ++i )
         {
             physent *o = dynents[i];
             if(!physics::issolid(o, d)) continue;
