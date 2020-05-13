@@ -1,3 +1,4 @@
+#include <vector>
 // renderva.cpp: handles the occlusion and rendering of vertex arrays
 #include <algorithm>
 using std::swap;
@@ -123,7 +124,7 @@ void sortvisiblevas()
 
 void findvisiblevas(vector<vtxarray *> &vas, bool resetocclude = false)
 {
-    loopv(vas)
+    for( size_t i = 0; i < vas.size(); ++i )
     {
         vtxarray &v = *vas[i];
         int prevvfc = resetocclude ? VFC_NOT_VISIBLE : v.curvfc;
@@ -136,7 +137,7 @@ void findvisiblevas(vector<vtxarray *> &vas, bool resetocclude = false)
                 continue;
             }
             addvisibleva(&v);
-            if(v.children.length()) findvisiblevas(v.children, prevvfc>=VFC_NOT_VISIBLE);
+            if(v.children.size()) findvisiblevas(v.children, prevvfc>=VFC_NOT_VISIBLE);
             if(prevvfc>=VFC_NOT_VISIBLE)
             {
                 v.occluded = !v.texs ? OCCLUDE_GEOM : OCCLUDE_NOTHING;
@@ -201,7 +202,7 @@ void visiblecubes(bool cull)
         memset(vfcDnear, 0, sizeof(vfcDnear));
         memset(vfcDfar, 0, sizeof(vfcDfar));
         visibleva = NULL;
-        loopv(valist)
+        for( size_t i = 0; i < valist.size(); ++i )
         {
             vtxarray *va = valist[i];
             va->distance = 0;
@@ -415,7 +416,7 @@ void findvisiblemms(const vector<extentity *> &ents, bool doquery)
     for(vtxarray *va = visibleva; va; va = va->next)
     {
         if(va->mapmodels.empty() || va->curvfc >= VFC_FOGGED || va->occluded >= OCCLUDE_BB) continue;
-        loopv(va->mapmodels)
+        for( size_t i = 0; i < va->mapmodels.size(); ++i )
         {
             octaentities *oe = va->mapmodels[i];
             if(isfoggedcube(oe->o, oe->size) || pvsoccluded(oe->bbmin, oe->bbmax)) continue;
@@ -432,7 +433,7 @@ void findvisiblemms(const vector<extentity *> &ents, bool doquery)
             else
             {
                 int visible = 0;
-                loopv(oe->mapmodels)
+                for( size_t i = 0; i < oe->mapmodels.size(); ++i )
                 {
                     extentity &e = *ents[oe->mapmodels[i]];
                     if(e.lastemit && e.spawned() && e.attrs[6]&MMT_HIDE) continue;
@@ -500,7 +501,7 @@ vtxarray *reflectedva;
 
 void renderreflectedmapmodels()
 {
-    const vector<extentity *> &ents = entities::getents();
+    const auto &ents = entities::getents();
 
     octaentities *mms = visiblemms;
     if(reflecting)
@@ -509,7 +510,7 @@ void renderreflectedmapmodels()
         for(vtxarray *va = reflectedva; va; va = va->rnext)
         {
             if(va->mapmodels.empty() || va->distance > reflectdist) continue;
-            loopv(va->mapmodels)
+            for( size_t i = 0; i < va->mapmodels.size(); ++i )
             {
                 octaentities *oe = va->mapmodels[i];
                 *lastmms = oe;
@@ -522,7 +523,7 @@ void renderreflectedmapmodels()
     {
         if(reflecting || refracting>0 ? oe->bbmax.z <= reflectz : oe->bbmin.z >= reflectz) continue;
         if(isfoggedcube(oe->o, oe->size)) continue;
-        loopv(oe->mapmodels)
+        for( size_t i = 0; i < oe->mapmodels.size(); ++i )
         {
            extentity &e = *ents[oe->mapmodels[i]];
            if(e.flags&EF_RENDER || (e.lastemit && e.spawned() && e.attrs[6]&MMT_HIDE)) continue;
@@ -534,7 +535,7 @@ void renderreflectedmapmodels()
         startmodelbatches();
         for(octaentities *oe = mms; oe; oe = reflecting ? oe->rnext : oe->next)
         {
-            loopv(oe->mapmodels)
+            for( size_t i = 0; i < oe->mapmodels.size(); ++i )
             {
                 extentity &e = *ents[oe->mapmodels[i]];
                 if(!(e.flags&EF_RENDER)) continue;
@@ -550,14 +551,14 @@ void rendermapmodels()
 {
     static int skipoq = 0;
     bool doquery = !drawtex && oqfrags && oqmm;
-    const vector<extentity *> &ents = entities::getents();
+    const auto &ents = entities::getents();
     findvisiblemms(ents, doquery);
 
     startmodelbatches();
     for(octaentities *oe = visiblemms; oe; oe = oe->next) if(oe->distance>=0)
     {
         bool rendered = false;
-        loopv(oe->mapmodels)
+        for( size_t i = 0; i < oe->mapmodels.size(); ++i )
         {
             extentity &e = *ents[oe->mapmodels[i]];
             if(!(e.flags&EF_RENDER)) continue;
@@ -947,8 +948,8 @@ struct geombatch
         if(va->dynlightmask > b.va->dynlightmask) return 1;
         if(vslot.slot->shader < b.vslot.slot->shader) return -1;
         if(vslot.slot->shader > b.vslot.slot->shader) return 1;
-        if(vslot.slot->params.length() < b.vslot.slot->params.length()) return -1;
-        if(vslot.slot->params.length() > b.vslot.slot->params.length()) return 1;
+        if(vslot.slot->params.size() < b.vslot.slot->params.size()) return -1;
+        if(vslot.slot->params.size() > b.vslot.slot->params.size()) return 1;
         if(es.texture < b.es.texture) return -1;
         if(es.texture > b.es.texture) return 1;
         if(es.lmid < b.es.lmid) return -1;
@@ -961,7 +962,7 @@ struct geombatch
     }
 };
 
-static vector<geombatch> geombatches;
+static std::vector<geombatch> geombatches;
 static int firstbatch = -1, numbatches = 0;
 
 static void mergetexs(renderstate &cur, vtxarray *va, elementset *texs = NULL, int numtexs = 0, ushort *edata = NULL)
@@ -982,21 +983,21 @@ static void mergetexs(renderstate &cur, vtxarray *va, elementset *texs = NULL, i
 
     if(firstbatch < 0)
     {
-        firstbatch = geombatches.length();
+        firstbatch = geombatches.size();
         numbatches = numtexs;
         loopi(numtexs-1)
         {
-            geombatches.add(geombatch(texs[i], edata, va)).next = i+1;
+            (geombatches.emplace_back(geombatch(texs[i], edata, va)),geombatches.back()).next = i+1;
             edata += texs[i].length[1];
         }
-        geombatches.add(geombatch(texs[numtexs-1], edata, va));
+        geombatches.emplace_back(geombatch(texs[numtexs-1], edata, va));
         return;
     }
 
     int prevbatch = -1, curbatch = firstbatch, curtex = 0;
     do
     {
-        geombatch &b = geombatches.add(geombatch(texs[curtex], edata, va));
+        geombatch &b = (geombatches.emplace_back(geombatch(texs[curtex], edata, va)),geombatches.back());
         edata += texs[curtex].length[1];
         int dir = -1;
         while(curbatch >= 0)
@@ -1019,23 +1020,23 @@ static void mergetexs(renderstate &cur, vtxarray *va, elementset *texs = NULL, i
             {
                 b.batch = curbatch;
                 b.next = geombatches[curbatch].next;
-                if(prevbatch < 0) firstbatch = geombatches.length()-1;
-                else geombatches[prevbatch].next = geombatches.length()-1;
-                curbatch = geombatches.length()-1;
+                if(prevbatch < 0) firstbatch = geombatches.size()-1;
+                else geombatches[prevbatch].next = geombatches.size()-1;
+                curbatch = geombatches.size()-1;
             }
             else
             {
                 b.batch = next;
-                geombatches[last].batch = geombatches.length()-1;
+                geombatches[last].batch = geombatches.size()-1;
             }
         }
         else
         {
             numbatches++;
             b.next = curbatch;
-            if(prevbatch < 0) firstbatch = geombatches.length()-1;
-            else geombatches[prevbatch].next = geombatches.length()-1;
-            prevbatch = geombatches.length()-1;
+            if(prevbatch < 0) firstbatch = geombatches.size()-1;
+            else geombatches[prevbatch].next = geombatches.size()-1;
+            prevbatch = geombatches.size()-1;
         }
     }
     while(++curtex < numtexs);
@@ -1162,7 +1163,7 @@ static void changeslottmus(renderstate &cur, int pass, Slot &slot, VSlot &vslot)
     int tmu = 2, envmaptmu = -1;
     if(slot.shader->type&SHADER_NORMALSLMS) tmu++;
     if(slot.shader->type&SHADER_ENVMAP) envmaptmu = tmu++;
-    loopvj(slot.sts)
+    for( size_t j = 0; j < slot.sts.size(); ++j )
     {
         Slot::Tex &t = slot.sts[j];
         if(t.type==TEX_DIFFUSE || t.combined>=0) continue;
@@ -1287,7 +1288,7 @@ static void renderbatch(renderstate &cur, int pass, geombatch &b)
 
 static void resetbatches()
 {
-    geombatches.setsize(0);
+    geombatches.clear();
     firstbatch = -1;
     numbatches = 0;
 }
@@ -1355,7 +1356,7 @@ void renderzpass(renderstate &cur, vtxarray *va)
     drawvatris(va, 3*numtris, edata);
 }
 
-vector<vtxarray *> foggedvas;
+std::vector<vtxarray *> foggedvas;
 
 #define startvaquery(va, flush) \
     do { \
@@ -1385,7 +1386,7 @@ void renderfoggedvas(renderstate &cur, bool doquery = false)
 
     if(!cur.vattribs) enablevattribs(cur, false);
 
-    loopv(foggedvas)
+    for( size_t i = 0; i < foggedvas.size(); ++i )
     {
         vtxarray *va = foggedvas[i];
         if(cur.vbuf!=va->vbuf) changevbuf(cur, RENDERPASS_FOG, va);
@@ -1396,7 +1397,7 @@ void renderfoggedvas(renderstate &cur, bool doquery = false)
         if(doquery) endvaquery(va, );
     }
 
-    foggedvas.setsize(0);
+    foggedvas.clear();
 }
 
 VAR(0, batchgeom, 0, 1, 1);
@@ -1411,7 +1412,7 @@ void renderva(renderstate &cur, vtxarray *va, int pass = RENDERPASS_LIGHTMAP, bo
             va->dynlightmask = 0;
             if(fogpass ? va->geommax.z<=reflectz-refractfog || !refractfog : va->curvfc==VFC_FOGGED)
             {
-                if(!cur.alphaing && !cur.blending) foggedvas.add(va);
+                if(!cur.alphaing && !cur.blending) (foggedvas.emplace_back( va ), foggedvas.back());
                 break;
             }
             if(!drawtex && !glaring && !cur.alphaing)
@@ -1419,18 +1420,18 @@ void renderva(renderstate &cur, vtxarray *va, int pass = RENDERPASS_LIGHTMAP, bo
                 va->shadowed = isshadowmapreceiver(va);
                 calcdynlightmask(va);
             }
-            if(doquery) startvaquery(va, { if(geombatches.length()) renderbatches(cur, pass); });
+            if(doquery) startvaquery(va, { if(geombatches.size()) renderbatches(cur, pass); });
             mergetexs(cur, va);
-            if(doquery) endvaquery(va, { if(geombatches.length()) renderbatches(cur, pass); });
-            else if(!batchgeom && geombatches.length()) renderbatches(cur, pass);
+            if(doquery) endvaquery(va, { if(geombatches.size()) renderbatches(cur, pass); });
+            else if(!batchgeom && geombatches.size()) renderbatches(cur, pass);
             break;
 
         case RENDERPASS_LIGHTMAP_BLEND:
         {
-            if(doquery) startvaquery(va, { if(geombatches.length()) renderbatches(cur, RENDERPASS_LIGHTMAP); });
+            if(doquery) startvaquery(va, { if(geombatches.size()) renderbatches(cur, RENDERPASS_LIGHTMAP); });
             mergetexs(cur, va, &va->eslist[va->texs], va->blends, va->edata + 3*va->tris);
-            if(doquery) endvaquery(va, { if(geombatches.length()) renderbatches(cur, RENDERPASS_LIGHTMAP); });
-            else if(!batchgeom && geombatches.length()) renderbatches(cur, RENDERPASS_LIGHTMAP);
+            if(doquery) endvaquery(va, { if(geombatches.size()) renderbatches(cur, RENDERPASS_LIGHTMAP); });
+            else if(!batchgeom && geombatches.size()) renderbatches(cur, RENDERPASS_LIGHTMAP);
             break;
         }
 
@@ -1546,7 +1547,7 @@ static void rendergeommultipass(renderstate &cur, int pass, bool fogpass)
         if(fogpass ? va->geommax.z <= reflectz-refractfog || !refractfog : va->curvfc==VFC_FOGGED) continue;
         renderva(cur, va, pass, fogpass);
     }
-    if(geombatches.length()) renderbatches(cur, pass);
+    if(geombatches.size()) renderbatches(cur, pass);
 }
 
 VAR(0, oqgeom, 0, 1, 1);
@@ -1605,7 +1606,7 @@ void rendergeom(float causticspass, bool fogpass)
             {
                 if(va->query)
                 {
-                    if(!zpass && geombatches.length()) renderbatches(cur, RENDERPASS_LIGHTMAP);
+                    if(!zpass && geombatches.size()) renderbatches(cur, RENDERPASS_LIGHTMAP);
                     if(cur.vattribs) disablevattribs(cur, !doZP);
                     if(cur.vbuf) disablevbuf(cur);
                     renderquery(cur, va->query, va);
@@ -1624,7 +1625,7 @@ void rendergeom(float causticspass, bool fogpass)
         renderva(cur, va, doZP ? RENDERPASS_Z : RENDERPASS_LIGHTMAP, fogpass, doOQ);
     }
 
-    if(geombatches.length()) renderbatches(cur, RENDERPASS_LIGHTMAP);
+    if(geombatches.size()) renderbatches(cur, RENDERPASS_LIGHTMAP);
 
     if(cur.vquery) disablevquery(cur);
     if(cur.vattribs) disablevattribs(cur, !doZP);
@@ -1652,7 +1653,7 @@ void rendergeom(float causticspass, bool fogpass)
             blends += va->blends;
             renderva(cur, va, RENDERPASS_LIGHTMAP, fogpass);
         }
-        if(geombatches.length()) renderbatches(cur, RENDERPASS_LIGHTMAP);
+        if(geombatches.size()) renderbatches(cur, RENDERPASS_LIGHTMAP);
         for(vtxarray *va = visibleva; va; va = va->next)
         {
             if(!va->texs || va->occluded < OCCLUDE_GEOM) continue;
@@ -1671,7 +1672,7 @@ void rendergeom(float causticspass, bool fogpass)
             blends += va->blends;
             renderva(cur, va, RENDERPASS_LIGHTMAP, fogpass);
         }
-        if(geombatches.length()) renderbatches(cur, RENDERPASS_LIGHTMAP);
+        if(geombatches.size()) renderbatches(cur, RENDERPASS_LIGHTMAP);
     }
 
     if(blends)
@@ -1703,7 +1704,7 @@ void rendergeom(float causticspass, bool fogpass)
             if(fogpass ? va->geommax.z <= reflectz-refractfog || !refractfog : va->curvfc==VFC_FOGGED) continue;
             renderva(cur, va, RENDERPASS_LIGHTMAP_BLEND, fogpass);
         }
-        if(geombatches.length()) renderbatches(cur, RENDERPASS_LIGHTMAP);
+        if(geombatches.size()) renderbatches(cur, RENDERPASS_LIGHTMAP);
         cur.blending = false;
 
         glColorMask(COLORMASK, GL_TRUE);
@@ -1715,7 +1716,7 @@ void rendergeom(float causticspass, bool fogpass)
 
     if(cur.vattribs) disablevattribs(cur);
 
-    if(foggedvas.length()) renderfoggedvas(cur, doOQ && !zpass);
+    if(foggedvas.size()) renderfoggedvas(cur, doOQ && !zpass);
 
     if(causticspass)
     {
@@ -1740,8 +1741,8 @@ void rendergeom(float causticspass, bool fogpass)
 
 void renderalphageom(bool fogpass)
 {
-    static vector<vtxarray *> alphavas;
-    alphavas.setsize(0);
+    static std::vector<vtxarray *> alphavas;
+    alphavas.clear();
     bool hasback = false;
     for(vtxarray *va = FIRSTVA; va; va = NEXTVA)
     {
@@ -1762,7 +1763,7 @@ void renderalphageom(bool fogpass)
             if(va->occluded >= OCCLUDE_GEOM && pvsoccluded(va->geommin, va->geommax)) continue;
         }
         if(fogpass ? va->geommax.z <= reflectz-refractfog || !refractfog : va->curvfc==VFC_FOGGED) continue;
-        alphavas.add(va);
+        (alphavas.emplace_back( va ), alphavas.back());
         if(va->alphabacktris) hasback = true;
     }
     if(alphavas.empty()) return;
@@ -1777,7 +1778,7 @@ void renderalphageom(bool fogpass)
         cur.alphaing = front+1;
         if(!front) glCullFace(GL_FRONT);
         cur.texgendim = -1;
-        loopv(alphavas) renderva(cur, alphavas[i], RENDERPASS_Z);
+        for( size_t i = 0; i < alphavas.size(); ++i ) renderva(cur, alphavas[i], RENDERPASS_Z);
         if(cur.depthmask) { cur.depthmask = false; glDepthMask(GL_FALSE); }
         cur.colormask = true;
         glColorMask(COLORMASK, GL_FALSE);
@@ -1793,8 +1794,8 @@ void renderalphageom(bool fogpass)
         cur.texgendim = -1;
         cur.colorscale = vec(1, 1, 1);
         cur.alphascale = -1;
-        loopv(alphavas) if(front || alphavas[i]->alphabacktris) renderva(cur, alphavas[i], RENDERPASS_LIGHTMAP, fogpass);
-        if(geombatches.length()) renderbatches(cur, RENDERPASS_LIGHTMAP);
+        for( size_t i = 0; i < alphavas.size(); ++i ) if(front || alphavas[i]->alphabacktris) renderva(cur, alphavas[i], RENDERPASS_LIGHTMAP, fogpass);
+        if(geombatches.size()) renderbatches(cur, RENDERPASS_LIGHTMAP);
 
         cleanupgeom(cur);
 
@@ -1812,7 +1813,7 @@ void renderalphageom(bool fogpass)
 
 void findreflectedvas(vector<vtxarray *> &vas, int prevvfc = VFC_PART_VISIBLE)
 {
-    loopv(vas)
+    for( size_t i = 0; i < vas.size(); ++i )
     {
         vtxarray *va = vas[i];
         if(prevvfc >= VFC_NOT_VISIBLE) va->curvfc = prevvfc;
@@ -1836,7 +1837,7 @@ void findreflectedvas(vector<vtxarray *> &vas, int prevvfc = VFC_PART_VISIBLE)
             va->rnext = *vprev;
             *vprev = va;
         }
-        if(va->children.length()) findreflectedvas(va->children, va->curvfc);
+        if(va->children.size()) findreflectedvas(va->children, va->curvfc);
     }
 }
 
@@ -1885,7 +1886,7 @@ static inline void updateskystats(vtxarray *va)
 
 void renderreflectedskyvas(vector<vtxarray *> &vas, int prevvfc = VFC_PART_VISIBLE)
 {
-    loopv(vas)
+    for( size_t i = 0; i < vas.size(); ++i )
     {
         vtxarray *va = vas[i];
         if(prevvfc >= VFC_NOT_VISIBLE) va->curvfc = prevvfc;
@@ -1896,7 +1897,7 @@ void renderreflectedskyvas(vector<vtxarray *> &vas, int prevvfc = VFC_PART_VISIB
             updateskystats(va);
             renderskyva(va);
         }
-        if(va->children.length()) renderreflectedskyvas(va->children, va->curvfc);
+        if(va->children.size()) renderreflectedskyvas(va->children, va->curvfc);
     }
 }
 
