@@ -1,3 +1,5 @@
+#include <vector>
+#include <string>
 #include <algorithm>
 using std::swap;
 #include "engine.h"
@@ -38,9 +40,9 @@ void newfont(char *name, char *tex, int *defaultw, int *defaulth)
 {
     font *f = &fonts[name];
     if(!f->name) f->name = newstring(name);
-    f->texs.shrink(0);
+    f->texs.clear();
     f->texs.add(textureload(tex));
-    f->chars.shrink(0);
+    f->chars.clear();
 
     f->charoffset = '!';
     f->maxw = f->defaultw = *defaultw;
@@ -69,16 +71,16 @@ void fonttex(char *s)
     if(!fontdef) return;
 
     Texture *t = textureload(s);
-    loopv(fontdef->texs) if(fontdef->texs[i] == t) { fontdeftex = i; return; }
-    fontdeftex = fontdef->texs.length();
-    fontdef->texs.add(t);
+    for( size_t i = 0; i < fontdef->texs.size(); ++i ) if(fontdef->texs[i] == t) { fontdeftex = i; return; }
+    fontdeftex = fontdef->texs.size();
+    (fontdef->texs.emplace_back( t ), fontdef->texs.back());
 }
 
 void fontchar(int *x, int *y, int *w, int *h, int *offsetx, int *offsety, int *advance)
 {
     if(!fontdef) return;
 
-    font::charinfo &c = fontdef->chars.add();
+    font::charinfo &c = (fontdef->chars.emplace_back(  ), fontdef->chars.back());
     c.x = *x;
     c.y = *y;
     c.w = *w ? *w : fontdef->defaultw;
@@ -96,7 +98,7 @@ void fontskip(int *n)
     if(!fontdef) return;
     loopi(max(*n, 1))
     {
-        font::charinfo &c = fontdef->chars.add();
+        font::charinfo &c = (fontdef->chars.emplace_back(  ), fontdef->chars.back());
         c.x = c.y = c.w = c.h = c.offsetx = c.offsety = c.advance = c.tex = 0;
     }
 }
@@ -135,7 +137,7 @@ void fontalias(const char *dst, const char *src)
     d->maxh = s->maxh;
 
     fontdef = d;
-    fontdeftex = d->texs.length()-1;
+    fontdeftex = d->texs.size()-1;
 }
 
 COMMAND(0, fontalias, "ss");
@@ -461,7 +463,7 @@ static float icon_width(const char *name, float scale)
                 TEXTCOLORIZE(qi, false, qx); \
             } \
         } \
-        else if(curfont->chars.inrange(qc-curfont->charoffset)) \
+        else if(( 0 <= qc-curfont->charoffset && qc-curfont->charoffset < curfont->chars.size() )) \
         { \
             float cw = scale*curfont->chars[qc-curfont->charoffset].advance; \
             if(cw <= 0) continue; \
@@ -545,7 +547,7 @@ static float icon_width(const char *name, float scale)
                 TEXTCOLORIZE(i, true, x); \
             } \
         } \
-        else if(curfont->chars.inrange(c-curfont->charoffset)) \
+        else if(( 0 <= c-curfont->charoffset && c-curfont->charoffset < curfont->chars.size() )) \
         { \
             float cw = scale*curfont->chars[c-curfont->charoffset].advance; \
             if(cw <= 0) continue; \
@@ -647,11 +649,11 @@ struct textkey
         DELETEA(file);
     }
 };
-vector<textkey *> textkeys;
+std::vector<textkey *> textkeys;
 
 textkey *findtextkey(const char *str)
 {
-    loopv(textkeys) if(!strcmp(textkeys[i]->name, str)) return textkeys[i];
+    for( size_t i = 0; i < textkeys.size(); ++i ) if(!strcmp(textkeys[i]->name, str)) return textkeys[i];
     string key = "textures/keys/";
     int q = strlen(key);
     concatstring(key, str);
@@ -661,7 +663,7 @@ textkey *findtextkey(const char *str)
     t->file = newstring(key);
     t->tex = textureload(t->file, 0, true, false);
     if(t->tex == notexture) t->tex = NULL;
-    textkeys.add(t);
+    (textkeys.emplace_back( t ), textkeys.back());
     return t;
 }
 
@@ -677,15 +679,15 @@ struct tklookup
         DELETEA(name);
     }
 };
-vector<tklookup *> tklookups;
+std::vector<tklookup *> tklookups;
 
 tklookup *findtklookup(const char *str, int type)
 {
-    loopv(tklookups) if(!strcmp(tklookups[i]->name, str) && tklookups[i]->type == type) return tklookups[i];
+    for( size_t i = 0; i < tklookups.size(); ++i ) if(!strcmp(tklookups[i]->name, str) && tklookups[i]->type == type) return tklookups[i];
     tklookup *t = new tklookup;
     t->name = newstring(str);
     t->type = type;
-    tklookups.add(t);
+    (tklookups.emplace_back( t ), tklookups.back());
     return t;
 }
 
@@ -708,15 +710,15 @@ float key_widthf(const char *str)
 {
     const char *keyn = str;
     if(*str == '=') keyn = gettklp(++str);
-    vector<char *> list;
+    std::vector<std::string> list;
     explodelist(keyn, list);
     float width = 0, scale = curfont->maxh*curfont->scale/float(curfont->defaulth)*curtextscale*textkeyimagescale;
-    loopv(list)
+    for( size_t i = 0; i < list.size(); ++i )
     {
         if(i && textkeyseps) width += text_widthf("|");
         if(textkeyimages)
         {
-            textkey *t = findtextkey(list[i]);
+            textkey *t = findtextkey(list[i].data());
             if(t && t->tex)
             {
                 width += (t->tex->w*scale)/float(t->tex->h);
@@ -724,10 +726,9 @@ float key_widthf(const char *str)
             }
             // fallback if not found
         }
-        defformatkey(keystr, list[i]);
+        defformatkey(keystr, list[i].data());
         width += text_widthf(keystr);
     }
-    list.deletearrays();
     return width;
 }
 
@@ -736,14 +737,14 @@ static int draw_key(Texture *&tex, const char *str, float sx, float sy)
     Texture *oldtex = tex;
     const char *keyn = str;
     if(*str == '=') keyn = gettklp(++str);
-    vector<char *> list;
+    std::vector<std::string> list;
     explodelist(keyn, list);
     float width = 0, sh = curfont->maxh*curfont->scale/float(curfont->defaulth)*curtextscale, h = sh*textkeyimagescale;
-    loopv(list)
+    for( size_t i = 0; i < list.size(); ++i )
     {
         if(textkeyimages)
         {
-            textkey *t = findtextkey(list[i]);
+            textkey *t = findtextkey(list[i].data());
             if(t && t->tex)
             {
                 if(tex != t->tex)
@@ -768,11 +769,10 @@ static int draw_key(Texture *&tex, const char *str, float sx, float sy)
             tex = oldtex;
             glBindTexture(GL_TEXTURE_2D, tex->id);
         }
-        defformatkey(keystr, list[i]);
+        defformatkey(keystr, list[i].data());
         draw_text(keystr, sx + width, sy, 255, 255, 255, 255, 0, -1, -1, 1, -1);
         width += text_widthf(keystr);
     }
-    list.deletearrays();
     return width;
 }
 
@@ -840,7 +840,7 @@ int draw_text(const char *str, int rleft, int rtop, int r, int g, int b, int a, 
 void reloadfonts()
 {
     enumerate(fonts, font, f,
-        loopv(f.texs) if(!reloadtexture(f.texs[i])) fatal("failed to reload font texture");
+        for( size_t i = 0; i < f.texs.size(); ++i ) if(!reloadtexture(f.texs[i])) fatal("failed to reload font texture");
     );
 }
 
@@ -892,16 +892,16 @@ int draw_textf(const char *fstr, int left, int top, int xpad, int ypad, int r, i
     return height;
 }
 
-vector<font *> fontstack;
+std::vector<font *> fontstack;
 
 bool pushfont(const char *name)
 {
-    if(!fontstack.length() && curfont)
-        fontstack.add(curfont);
+    if(!fontstack.size() && curfont)
+        (fontstack.emplace_back( curfont ), fontstack.back());
 
     if(setfont(name))
     {
-        fontstack.add(curfont);
+        (fontstack.emplace_back( curfont ), fontstack.back());
         return true;
     }
     return false;
@@ -912,8 +912,8 @@ bool popfont(int num)
     loopi(num)
     {
         if(fontstack.empty()) break;
-        fontstack.pop();
+        (fontstack.back(),fontstack.pop_back());
     }
-    if(fontstack.length()) { curfont = fontstack.last(); return true; }
+    if(fontstack.size()) { curfont = fontstack.back(); return true; }
     return setfont("default");
 }
