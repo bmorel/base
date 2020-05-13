@@ -1,3 +1,4 @@
+#include <vector>
 #include <algorithm>
 using std::swap;
 #include "game.h"
@@ -7,7 +8,7 @@ namespace capture
 
     bool carryaffinity(gameent *d)
     {
-        loopv(st.flags) if(st.flags[i].owner == d) return true;
+        for( size_t i = 0; i < st.flags.size(); ++i ) if(st.flags[i].owner == d) return true;
         return false;
     }
 
@@ -26,7 +27,7 @@ namespace capture
     bool canpickup(gameent *d, int n, bool check = false)
     {
         if(!(AA(d->actortype, abilities)&(1<<A_A_AFFINITY))) return false;
-        if(!st.flags.inrange(n)) return false;
+        if(!( 0 <= n && n < st.flags.size() )) return false;
         capturestate::flag &f = st.flags[n];
         if(f.owner) return false;
         if(f.team == d->team)
@@ -51,9 +52,9 @@ namespace capture
 
     void drawblips(int w, int h, float blend)
     {
-        static vector<int> hasflags; hasflags.setsize(0);
-        loopv(st.flags) if(st.flags[i].owner == game::focus) hasflags.add(i);
-        loopv(st.flags)
+        static std::vector<int> hasflags; hasflags.clear();
+        for( size_t i = 0; i < st.flags.size(); ++i ) if(st.flags[i].owner == game::focus) (hasflags.emplace_back( i ), hasflags.back());
+        for( size_t i = 0; i < st.flags.size(); ++i )
         {
             capturestate::flag &f = st.flags[i];
             loopk(2)
@@ -93,12 +94,12 @@ namespace capture
         }
     }
 
-    char *buildflagstr(vector<int> &f, bool named = false)
+    char *buildflagstr(std::vector<int> &f, bool named = false)
     {
         static string s; s[0] = '\0';
-        loopv(f)
+        for( size_t i = 0; i < f.size(); ++i )
         {
-            defformatstring(d, "\fs%s\f[%d]\f(%s)%s\fS", i && named ? (i == f.length()-1 ? " & " : ", ") : "", TEAM(st.flags[f[i]].team, colour), hud::flagtex, named ? TEAM(st.flags[f[i]].team, name) : "");
+            defformatstring(d, "\fs%s\f[%d]\f(%s)%s\fS", i && named ? (i == f.size()-1 ? " & " : ", ") : "", TEAM(st.flags[f[i]].team, colour), hud::flagtex, named ? TEAM(st.flags[f[i]].team, name) : "");
             concatstring(s, d);
         }
         return s;
@@ -117,21 +118,21 @@ namespace capture
                 popfont();
             }
             bool ownflag = false;
-            static vector<int> pickup, hasflags, taken, droppedflags;
-            pickup.setsize(0); hasflags.setsize(0); taken.setsize(0); droppedflags.setsize(0);
-            loopv(st.flags)
+            static std::vector<int> pickup, hasflags, taken, droppedflags;
+            pickup.clear(); hasflags.clear(); taken.clear(); droppedflags.clear();
+            for( size_t i = 0; i < st.flags.size(); ++i )
             {
                 capturestate::flag &f = st.flags[i];
                 if(f.owner == game::focus)
                 {
-                    hasflags.add(i);
+                    (hasflags.emplace_back( i ), hasflags.back());
                     if(f.team == game::focus->team) ownflag = true;
                 }
-                if(canpickup(game::focus, i, true)) pickup.add(i);
+                if(canpickup(game::focus, i, true)) (pickup.emplace_back( i ), pickup.back());
                 if(f.team == game::focus->team)
                 {
-                    if(f.owner && f.owner->team != game::focus->team) taken.add(i);
-                    else if(f.droptime) droppedflags.add(i);
+                    if(f.owner && f.owner->team != game::focus->team) (taken.emplace_back( i ), taken.back());
+                    else if(f.droptime) (droppedflags.emplace_back( i ), droppedflags.back());
                 }
             }
             if(!hasflags.empty())
@@ -147,7 +148,7 @@ namespace capture
             if(!pickup.empty())
             {
                 pushfont("emphasis");
-                char *str = buildflagstr(pickup, pickup.length() <= 3);
+                char *str = buildflagstr(pickup, pickup.size() <= 3);
                 ty += draw_textf("Nearby: %s", tx, ty, int(FONTW*hud::noticepadx), int(FONTH*hud::noticepady), tr, tg, tb, int(255*blend), TEXT_CENTERED, -1, -1, 1, str);
                 popfont();
             }
@@ -160,15 +161,15 @@ namespace capture
             if(!taken.empty())
             {
                 pushfont("default");
-                char *str = buildflagstr(taken, taken.length() <= 3);
-                ty += draw_textf("%s taken: %s", tx, ty, int(FONTW*hud::noticepadx), int(FONTH*hud::noticepady), tr, tg, tb, int(255*blend), TEXT_CENTERED, -1, -1, 1, taken.length() == 1 ? "Flag" : "Flags", str);
+                char *str = buildflagstr(taken, taken.size() <= 3);
+                ty += draw_textf("%s taken: %s", tx, ty, int(FONTW*hud::noticepadx), int(FONTH*hud::noticepady), tr, tg, tb, int(255*blend), TEXT_CENTERED, -1, -1, 1, taken.size() == 1 ? "Flag" : "Flags", str);
                 popfont();
             }
             if(!droppedflags.empty())
             {
                 pushfont("default");
-                char *str = buildflagstr(droppedflags, droppedflags.length() <= 3);
-                ty += draw_textf("%s dropped: %s", tx, ty, int(FONTW*hud::noticepadx), int(FONTH*hud::noticepady), tr, tg, tb, int(255*blend), TEXT_CENTERED, -1, -1, 1, droppedflags.length() == 1 ? "Flag" : "Flags", str);
+                char *str = buildflagstr(droppedflags, droppedflags.size() <= 3);
+                ty += draw_textf("%s dropped: %s", tx, ty, int(FONTW*hud::noticepadx), int(FONTH*hud::noticepady), tr, tg, tb, int(255*blend), TEXT_CENTERED, -1, -1, 1, droppedflags.size() == 1 ? "Flag" : "Flags", str);
                 popfont();
             }
         }
@@ -178,26 +179,26 @@ namespace capture
     {
         if(game::focus->state == CS_ALIVE && hud::showevents >= 2)
         {
-            static vector<int> hasflags;
-            hasflags.setsize(0);
-            loopv(st.flags)
+            static std::vector<int> hasflags;
+            hasflags.clear();
+            for( size_t i = 0; i < st.flags.size(); ++i )
             {
                 capturestate::flag &f = st.flags[i];
-                if(f.owner == game::focus) hasflags.add(i);
+                if(f.owner == game::focus) (hasflags.emplace_back( i ), hasflags.back());
             }
             if(!hasflags.empty())
             {
-                char *str = buildflagstr(hasflags, hasflags.length() <= 3);
-                ty -= draw_textf("You are holding the %s %s", tx, ty, int(FONTW*hud::eventpadx), int(FONTH*hud::eventpady), tr, tg, tb, int(255*blend), TEXT_SKIN|TEXT_CENTERED, -1, -1, 1, str, hasflags.length() == 1 ? "flag" : "flags")+FONTH/4;
+                char *str = buildflagstr(hasflags, hasflags.size() <= 3);
+                ty -= draw_textf("You are holding the %s %s", tx, ty, int(FONTW*hud::eventpadx), int(FONTH*hud::eventpady), tr, tg, tb, int(255*blend), TEXT_SKIN|TEXT_CENTERED, -1, -1, 1, str, hasflags.size() == 1 ? "flag" : "flags")+FONTH/4;
             }
         }
     }
 
     int drawinventory(int x, int y, int s, int m, float blend)
     {
-        int sy = 0, numflags = st.flags.length(), estsize = numflags*s, fitsize = y-m, size = s;
+        int sy = 0, numflags = st.flags.size(), estsize = numflags*s, fitsize = y-m, size = s;
         if(estsize > fitsize) size = int((fitsize/float(estsize))*s);
-        loopv(st.flags)
+        for( size_t i = 0; i < st.flags.size(); ++i )
         {
             if(y-sy-size < m) break;
             capturestate::flag &f = st.flags[i];
@@ -245,10 +246,10 @@ namespace capture
 
     void checkcams(vector<cament *> &cameras)
     {
-        loopv(st.flags) // flags/bases
+        for( size_t i = 0; i < st.flags.size(); ++i ) // flags/bases
         {
             capturestate::flag &f = st.flags[i];
-            cament *c = cameras.add(new cament(cameras.length(), cament::AFFINITY, i));
+            cament *c = (cameras.emplace_back(new cament(cameras.size(), cament::AFFINITY, i)),cameras.back());
             c->o = f.pos(true);
             c->o.z += enttype[AFFINITY].radius*2/3;
             c->player = f.owner;
@@ -261,7 +262,7 @@ namespace capture
         {
             case cament::AFFINITY:
             {
-                if(st.flags.inrange(c->id))
+                if(( 0 <= c->id && c->id < st.flags.size() ))
                 {
                     capturestate::flag &f = st.flags[c->id];
                     c->o = f.pos(true);
@@ -284,20 +285,20 @@ namespace capture
 
     void render()
     {
-        static vector<int> numflags, iterflags; // dropped/owned
-        loopv(numflags) numflags[i] = iterflags[i] = 0;
-        loopv(st.flags)
+        static std::vector<int> numflags, iterflags; // dropped/owned
+        for( size_t i = 0; i < numflags.size(); ++i ) numflags[i] = iterflags[i] = 0;
+        for( size_t i = 0; i < st.flags.size(); ++i )
         {
             capturestate::flag &f = st.flags[i];
             if(!f.owner) continue;
-            while(numflags.length() <= f.owner->clientnum)
+            while(numflags.size() <= f.owner->clientnum)
             {
-                numflags.add(0);
-                iterflags.add(0);
+                (numflags.emplace_back( 0 ), numflags.back());
+                (iterflags.emplace_back( 0 ), iterflags.back());
             }
             numflags[f.owner->clientnum]++;
         }
-        loopv(st.flags) // flags/bases
+        for( size_t i = 0; i < st.flags.size(); ++i ) // flags/bases
         {
             capturestate::flag &f = st.flags[i];
             vec pos = f.pos(true);
@@ -326,7 +327,7 @@ namespace capture
                 if(f.owner) yaw = f.owner->yaw-45.f+(90/float(numflags[f.owner->clientnum]+1)*(iterflags[f.owner->clientnum]+1));
                 else
                 {
-                    yaw = ((lastmillis/8)+(360/st.flags.length()*i))%360;
+                    yaw = ((lastmillis/8)+(360/st.flags.size()*i))%360;
                     if(f.proj) flagpos.z -= f.proj->height;
                 }
                 while(yaw >= 360.f) yaw -= 360.f;
@@ -369,7 +370,7 @@ namespace capture
 
     void adddynlights()
     {
-        loopv(st.flags)
+        for( size_t i = 0; i < st.flags.size(); ++i )
         {
             capturestate::flag &f = st.flags[i];
             if(f.owner || f.droptime)
@@ -385,21 +386,21 @@ namespace capture
 
     void setup()
     {
-        loopv(entities::ents) if(entities::ents[i]->type == AFFINITY)
+        for( size_t i = 0; i < entities::ents.size(); ++i ) if(entities::ents[i]->type == AFFINITY)
         {
             gameentity &e = *(gameentity *)entities::ents[i];
             if(!m_check(e.attrs[3], e.attrs[4], game::gamemode, game::mutators) || !isteam(game::gamemode, game::mutators, e.attrs[0], T_FIRST))
                 continue;
             st.addaffinity(e.o, e.attrs[0], e.attrs[1], e.attrs[2]);
-            if(st.flags.length() >= MAXPARAMS) break;
+            if(st.flags.size() >= MAXPARAMS) break;
         }
     }
 
     void sendaffinity(packetbuf &p)
     {
         putint(p, N_INITAFFIN);
-        putint(p, st.flags.length());
-        loopv(st.flags)
+        putint(p, st.flags.size());
+        for( size_t i = 0; i < st.flags.size(); ++i )
         {
             capturestate::flag &f = st.flags[i];
             putint(p, f.team);
@@ -417,7 +418,7 @@ namespace capture
     void parseaffinity(ucharbuf &p)
     {
         int numflags = getint(p);
-        while(st.flags.length() > numflags) st.flags.pop();
+        while(st.flags.size() > numflags) (st.flags.back(),st.flags.pop_back());
         loopi(numflags)
         {
             int team = getint(p), yaw = getint(p), pitch = getint(p), owner = getint(p), dropped = 0, dropoffset = -1;
@@ -435,7 +436,7 @@ namespace capture
             }
             if(p.overread()) break;
             if(i >= MAXPARAMS) continue;
-            while(!st.flags.inrange(i)) st.flags.add();
+            while(!( 0 <= i && i < st.flags.size() )) (st.flags.emplace_back(  ), st.flags.back());
             capturestate::flag &f = st.flags[i];
             f.reset();
             f.team = team;
@@ -452,7 +453,7 @@ namespace capture
 
     void dropaffinity(gameent *d, int i, const vec &droploc, const vec &inertia, int offset)
     {
-        if(!st.flags.inrange(i)) return;
+        if(!( 0 <= i && i < st.flags.size() )) return;
         capturestate::flag &f = st.flags[i];
         game::announcef(S_V_FLAGDROP, CON_SELF, d, true, "\fa%s dropped the the %s flag", game::colourname(d), game::colourteam(f.team, "flagtex"));
         st.dropaffinity(i, droploc, inertia, lastmillis, offset);
@@ -460,7 +461,7 @@ namespace capture
 
     void removeplayer(gameent *d)
     {
-        loopv(st.flags) if(st.flags[i].owner == d)
+        for( size_t i = 0; i < st.flags.size(); ++i ) if(st.flags[i].owner == d)
         {
             capturestate::flag &f = st.flags[i];
             st.dropaffinity(i, f.owner->feetpos(capturedropheight), f.owner->vel, lastmillis);
@@ -492,7 +493,7 @@ namespace capture
 
     void returnaffinity(gameent *d, int i)
     {
-        if(!st.flags.inrange(i)) return;
+        if(!( 0 <= i && i < st.flags.size() )) return;
         capturestate::flag &f = st.flags[i];
         affinityeffect(i, d->team, d->feetpos(), f.above, 3, "RETURNED");
         game::spawneffect(PART_SPARK, vec(f.spawnloc).add(vec(0, 0, enttype[AFFINITY].radius*0.45f)), enttype[AFFINITY].radius*0.25f, TEAM(f.team, colour), 1.5f);
@@ -503,7 +504,7 @@ namespace capture
 
     void resetaffinity(int i, int value, const vec &pos)
     {
-        if(!st.flags.inrange(i)) return;
+        if(!( 0 <= i && i < st.flags.size() )) return;
         capturestate::flag &f = st.flags[i];
         if(value > 0)
         {
@@ -525,11 +526,11 @@ namespace capture
 
     void scoreaffinity(gameent *d, int relay, int goal, int score)
     {
-        if(!st.flags.inrange(relay)) return;
+        if(!( 0 <= relay && relay < st.flags.size() )) return;
         float radius = enttype[AFFINITY].radius;
         vec abovegoal, capturepos, returnpos;
         capturestate::flag &f = st.flags[relay];
-        if(st.flags.inrange(goal))
+        if(( 0 <= goal && goal < st.flags.size() ))
         {
             capturestate::flag &g = st.flags[goal];
             abovegoal = g.above;
@@ -552,13 +553,13 @@ namespace capture
 
     void takeaffinity(gameent *d, int i)
     {
-        if(!st.flags.inrange(i)) return;
+        if(!( 0 <= i && i < st.flags.size() )) return;
         capturestate::flag &f = st.flags[i];
         playsound(S_CATCH, d->o, d);
         affinityeffect(i, d->team, d->feetpos(), f.pos(true), 1, f.team == d->team ? "SECURED" : "TAKEN");
         game::announcef(f.team == d->team ? S_V_FLAGSECURED : S_V_FLAGPICKUP, CON_SELF, d, true, "\fa%s %s the %s flag", game::colourname(d), f.team == d->team ? "secured" : (f.droptime ? "picked up" : "stole"), game::colourteam(f.team, "flagtex"));
         st.takeaffinity(i, d, lastmillis);
-        if(d->ai) aihomerun(d, d->ai->state.last());
+        if(d->ai) aihomerun(d, d->ai->state.back());
     }
 
     void checkaffinity(gameent *d, int i)
@@ -575,7 +576,7 @@ namespace capture
         gameent *d = NULL;
         int numdyn = game::numdynents();
         loopj(numdyn) if(((d = (gameent *)game::iterdynents(j))) && d->state == CS_ALIVE && (d == game::player1 || d->ai)) dropaffinity(d);
-        loopv(st.flags)
+        for( size_t i = 0; i < st.flags.size(); ++i )
         {
             capturestate::flag &f = st.flags[i];
             if(f.owner) continue;
@@ -608,7 +609,7 @@ namespace capture
             {
                 int closest = -1;
                 float closedist = 1e16f;
-                loopv(st.flags)
+                for( size_t i = 0; i < st.flags.size(); ++i )
                 {
                     capturestate::flag &f = st.flags[i];
                     if(f.team == d->team && (k || ((!f.owner || f.owner == d) && !f.droptime)))
@@ -621,7 +622,7 @@ namespace capture
                         }
                     }
                 }
-                if(st.flags.inrange(closest) && ai::makeroute(d, b, aiflagpos(d, st.flags[closest])))
+                if(( 0 <= closest && closest < st.flags.size() ) && ai::makeroute(d, b, aiflagpos(d, st.flags[closest])))
                 {
                     d->ai->switchstate(b, ai::AI_S_PURSUE, ai::AI_T_AFFINITY, closest, ai::AI_A_HASTE);
                     return true;
@@ -641,8 +642,8 @@ namespace capture
     {
         if(d->actortype == A_BOT)
         {
-            static vector<int> taken; taken.setsize(0);
-            loopv(st.flags)
+            static std::vector<int> taken; taken.clear();
+            for( size_t i = 0; i < st.flags.size(); ++i )
             {
                 capturestate::flag &g = st.flags[i];
                 if(g.owner == d)
@@ -650,17 +651,17 @@ namespace capture
                     if(!m_ctf_protect(game::gamemode, game::mutators)) return aihomerun(d, b);
                 }
                 else if(g.team == d->team && (m_ctf_protect(game::gamemode, game::mutators) || (g.owner && g.owner->team != d->team) || g.droptime))
-                    taken.add(i);
+                    (taken.emplace_back( i ), taken.back());
             }
             if(!ai::badhealth(d)) while(!taken.empty())
             {
-                int flag = taken.length() > 2 ? rnd(taken.length()) : 0;
+                int flag = taken.size() > 2 ? rnd(taken.size()) : 0;
                 if(ai::makeroute(d, b, aiflagpos(d, st.flags[taken[flag]])))
                 {
                     d->ai->switchstate(b, ai::AI_S_PURSUE, ai::AI_T_AFFINITY, taken[flag], ai::AI_A_HASTE);
                     return true;
                 }
-                else taken.remove(flag);
+                else taken.erase( taken.begin() + flag );
             }
         }
         return false;
@@ -669,13 +670,13 @@ namespace capture
     void aifind(gameent *d, ai::aistate &b, vector<ai::interest> &interests)
     {
         vec pos = d->feetpos();
-        loopvj(st.flags)
+        for( size_t j = 0; j < st.flags.size(); ++j )
         {
             capturestate::flag &f = st.flags[j];
             bool home = f.team == d->team;
             if(d->actortype == A_BOT && m_duke(game::gamemode, game::mutators) && home) continue;
             static vector<int> targets; // build a list of others who are interested in this
-            targets.setsize(0);
+            targets.clear();
             bool regen = d->actortype != A_BOT || f.team == T_NEUTRAL || m_ctf_protect(game::gamemode, game::mutators) || !m_regen(game::gamemode, game::mutators) || d->health >= m_health(game::gamemode, game::mutators, d->actortype);
             ai::checkothers(targets, d, home || d->actortype != A_BOT ? ai::AI_S_DEFEND : ai::AI_S_PURSUE, ai::AI_T_AFFINITY, j, true);
             if(d->actortype == A_BOT)
@@ -685,8 +686,8 @@ namespace capture
                 float mindist = enttype[AFFINITY].radius*4; mindist *= mindist;
                 loopi(numdyns) if((e = (gameent *)game::iterdynents(i)) && !e->ai && e->state == CS_ALIVE && d->team == e->team)
                 {
-                    if(targets.find(e->clientnum) < 0 && (f.owner == e || e->feetpos().squaredist(aiflagpos(d, f)) <= mindist))
-                        targets.add(e->clientnum);
+                    if(find( targets, e->clientnum ) < 0 && (f.owner == e || e->feetpos().squaredist(aiflagpos(d, f)) <= mindist))
+                        (targets.emplace_back( e->clientnum ), targets.back());
                 }
             }
             if(home)
@@ -696,7 +697,7 @@ namespace capture
                 else if(d->hasweap(ai::weappref(d), m_weapon(d->actortype, game::gamemode, game::mutators)))
                 { // see if we can relieve someone who only has a piece of crap
                     gameent *t;
-                    loopvk(targets) if((t = game::getclient(targets[k])))
+                    for( size_t k = 0; k < targets.size(); ++k ) if((t = game::getclient(targets[k])))
                     {
                         if((t->ai && !t->hasweap(ai::weappref(t), m_weapon(t->actortype, game::gamemode, game::mutators))) || (!t->ai && t->weapselect < W_OFFSET))
                         {
@@ -707,7 +708,7 @@ namespace capture
                 }
                 if(guard)
                 { // defend the flag
-                    ai::interest &n = interests.add();
+                    ai::interest &n = (interests.emplace_back(  ), interests.back());
                     n.state = ai::AI_S_DEFEND;
                     n.node = ai::closestwaypoint(aiflagpos(d, f), ai::CLOSEDIST, true);
                     n.target = j;
@@ -722,7 +723,7 @@ namespace capture
             {
                 if(targets.empty())
                 { // attack the flag
-                    ai::interest &n = interests.add();
+                    ai::interest &n = (interests.emplace_back(  ), interests.back());
                     n.state = d->actortype == A_BOT ? ai::AI_S_PURSUE : ai::AI_S_DEFEND;
                     n.node = ai::closestwaypoint(aiflagpos(d, f), ai::CLOSEDIST, true);
                     n.target = j;
@@ -734,9 +735,9 @@ namespace capture
                 else
                 { // help by defending the attacker
                     gameent *t;
-                    loopvk(targets) if((t = game::getclient(targets[k])))
+                    for( size_t k = 0; k < targets.size(); ++k ) if((t = game::getclient(targets[k])))
                     {
-                        ai::interest &n = interests.add();
+                        ai::interest &n = (interests.emplace_back(  ), interests.back());
                         bool team = d->team == t->team;
                         n.state = team ? ai::AI_S_DEFEND : ai::AI_S_PURSUE;
                         n.node = t->lastnode;
@@ -756,10 +757,10 @@ namespace capture
     {
         if(d->actortype == A_BOT)
         {
-            if(!m_ctf_protect(game::gamemode, game::mutators)) loopv(st.flags) if(st.flags[i].owner == d) return aihomerun(d, b);
+            if(!m_ctf_protect(game::gamemode, game::mutators)) for( size_t i = 0; i < st.flags.size(); ++i ) if(st.flags[i].owner == d) return aihomerun(d, b);
             if(d->actortype == A_BOT && m_duke(game::gamemode, game::mutators) && b.owner < 0) return false;
         }
-        if(st.flags.inrange(b.target))
+        if(( 0 <= b.target && b.target < st.flags.size() ))
         {
             capturestate::flag &f = st.flags[b.target];
             if(f.team == d->team && f.owner && f.owner->team != d->team && ai::violence(d, b, f.owner, 4)) return true;
@@ -771,15 +772,15 @@ namespace capture
                     if(b.owner < 0)
                     {
                         static vector<int> targets; // build a list of others who are interested in this
-                        targets.setsize(0);
+                        targets.clear();
                         ai::checkothers(targets, d, ai::AI_S_DEFEND, ai::AI_T_AFFINITY, b.target, true);
                         gameent *e = NULL;
                         int numdyns = game::numdynents();
                         float mindist = enttype[AFFINITY].radius*4; mindist *= mindist;
                         loopi(numdyns) if((e = (gameent *)game::iterdynents(i)) && !e->ai && e->state == CS_ALIVE && d->team == e->team)
                         {
-                            if(targets.find(e->clientnum) < 0 && (f.owner == e || e->feetpos().squaredist(aiflagpos(d, f)) <= mindist))
-                                targets.add(e->clientnum);
+                            if(find( targets, e->clientnum ) < 0 && (f.owner == e || e->feetpos().squaredist(aiflagpos(d, f)) <= mindist))
+                                (targets.emplace_back( e->clientnum ), targets.back());
                         }
                         if(!targets.empty())
                         {
@@ -800,7 +801,7 @@ namespace capture
                 }
                 vec pos = d->feetpos();
                 float mindist = enttype[AFFINITY].radius*8; mindist *= mindist;
-                loopv(st.flags)
+                for( size_t i = 0; i < st.flags.size(); ++i )
                 { // get out of the way of the returnee!
                     capturestate::flag &g = st.flags[i];
                     if(pos.squaredist(aiflagpos(d, g)) <= mindist)
@@ -817,7 +818,7 @@ namespace capture
 
     bool aipursue(gameent *d, ai::aistate &b)
     {
-        if(st.flags.inrange(b.target) && d->actortype == A_BOT)
+        if(( 0 <= b.target && b.target < st.flags.size() ) && d->actortype == A_BOT)
         {
             capturestate::flag &f = st.flags[b.target];
             if(f.team != d->team)
@@ -830,7 +831,7 @@ namespace capture
                 }
                 return ai::makeroute(d, b, aiflagpos(d, f));
             }
-            else loopv(st.flags) if(st.flags[i].owner == d && ai::makeroute(d, b, aiflagpos(d, f)))
+            else for( size_t i = 0; i < st.flags.size(); ++i ) if(st.flags[i].owner == d && ai::makeroute(d, b, aiflagpos(d, f)))
             {
                 b.acttype = ai::AI_A_HASTE;
                 return true;
