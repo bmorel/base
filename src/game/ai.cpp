@@ -1,3 +1,4 @@
+#include <vector>
 #include <algorithm>
 using std::swap;
 #include "game.h"
@@ -148,7 +149,7 @@ namespace ai
 
     int weappref(gameent *d)
     {
-        if(d->loadweap.length()) return d->loadweap[0];
+        if(d->loadweap.size()) return d->loadweap[0];
         return m_weapon(d->actortype, game::gamemode, game::mutators);
     }
 
@@ -227,8 +228,8 @@ namespace ai
         if((d->actortype = at) >= A_ENEMY) d->type = ENT_AI;
         else
         {
-            d->loadweap.shrink(0);
-            loopv(lweaps) d->loadweap.add(lweaps[i]);
+            d->loadweap.clear();
+            for( size_t i = 0; i < lweaps.size(); ++i ) d->loadweap.emplace_back( lweaps[i] );
         }
         d->setname(name);
         d->spawnpoint = et;
@@ -258,7 +259,7 @@ namespace ai
     {
         if(!gs_playing(game::gamestate))
         {
-            loopv(game::players) if(game::players[i] && game::players[i]->ai) game::players[i]->stopmoving(true);
+            for( size_t i = 0; i < game::players.size(); ++i ) if(game::players[i] && game::players[i]->ai) game::players[i]->stopmoving(true);
         }
         else // fixed rate logic done out-of-sequence at 1 frame per second for each ai
         {
@@ -270,13 +271,13 @@ namespace ai
             if(iteration < 0 && totalmillis-itermillis >= 1000)
             {
                 iteration = itercount = 0;
-                loopv(game::players) if(game::players[i] && game::players[i]->ai) itercount++;
+                for( size_t i = 0; i < game::players.size(); ++i ) if(game::players[i] && game::players[i]->ai) itercount++;
                 itermillis = totalmillis;
             }
             if(itercount > 0)
             {
                 int x = 999/itercount, y = totalmillis-itermillis, c = 0;
-                loopv(game::players) if(game::players[i] && game::players[i]->ai)
+                for( size_t i = 0; i < game::players.size(); ++i ) if(game::players[i] && game::players[i]->ai)
                 {
                     bool iterate = c == iteration && y >= c*x;
                     if(iterate) checkinfo(game::players[i]);
@@ -292,12 +293,12 @@ namespace ai
 
     int checkothers(vector<int> &targets, gameent *d, int state, int targtype, int target, bool teams, int *members)
     { // checks the states of other ai for a match
-        targets.setsize(0);
+        targets.clear();
         gameent *e = NULL;
         int numdyns = game::numdynents();
         loopi(numdyns) if((e = (gameent *)game::iterdynents(i)))
         {
-            if(targets.find(e->clientnum) >= 0) continue;
+            if(find( targets, e->clientnum ) >= 0) continue;
             if(teams && (d->team != T_ENEMY || e->team != T_ENEMY) && m_team(game::gamemode, game::mutators) && d->team != e->team) continue;
             if(members) (*members)++;
             if(e == d || !e->ai || e->state != CS_ALIVE || e->actortype != d->actortype) continue;
@@ -305,9 +306,9 @@ namespace ai
             if(state >= 0 && b.type != state) continue;
             if(target >= 0 && b.target != target) continue;
             if(targtype >=0 && b.targtype != targtype) continue;
-            targets.add(e->clientnum);
+            targets.emplace_back( e->clientnum );
         }
-        return targets.length();
+        return targets.size();
     }
 
     bool makeroute(gameent *d, aistate &b, int node, bool changed, int retries)
@@ -332,11 +333,11 @@ namespace ai
     bool randomnode(gameent *d, aistate &b, const vec &pos, float guard, float wander)
     {
         static vector<int> candidates;
-        candidates.setsize(0);
+        candidates.clear();
         findwaypointswithin(pos, guard, wander, candidates);
         while(!candidates.empty())
         {
-            int w = rnd(candidates.length()), n = candidates.removeunordered(w);
+            int w = rnd(candidates.size()), n = candidates.removeunordered(w);
             if(n != d->lastnode && !d->ai->hasprevnode(n) && !obstacles.find(n, d) && makeroute(d, b, n)) return true;
         }
         return false;
@@ -456,22 +457,22 @@ namespace ai
     bool target(gameent *d, aistate &b, int pursue = 0, bool force = false)
     {
         static vector<targcache> targets;
-        targets.setsize(0);
+        targets.clear();
         gameent *e = NULL;
         int numdyns = game::numdynents();
         loopi(numdyns) if((e = (gameent *)game::iterdynents(i)) && targetable(d, e))
         {
-            targcache &c = targets.add();
+            targcache &c = (targets.emplace_back(  ), targets.back());
             c.d = e;
             c.dist = d->o.squaredist(e->o);
-            if(d->dominating.find(c.d) >= 0) c.dominated = true;
+            if(find( d->dominating, c.d ) >= 0) c.dominated = true;
             c.visible = force || cansee(d, d->o, e->o, d->actortype >= A_ENEMY);
         }
         if(targets.empty()) return false;
         targets.sort(targcache::tcsort);
         d->ai->enemy = -1;
         d->ai->enemymillis = d->ai->enemyseen = 0;
-        loopv(targets) if(violence(d, b, targets[i].d, pursue || targets[i].dominated ? 1 : 0)) return true;
+        for( size_t i = 0; i < targets.size(); ++i ) if(violence(d, b, targets[i].d, pursue || targets[i].dominated ? 1 : 0)) return true;
         return false;
     }
 
@@ -481,7 +482,7 @@ namespace ai
         int numdyns = game::numdynents();
         loopi(numdyns) if((e = (gameent *)game::iterdynents(i)) && e != d && (all || e->actortype == A_PLAYER) && d->team == e->team)
         {
-            interest &n = interests.add();
+            interest &n = (interests.emplace_back(  ), interests.back());
             n.state = AI_S_DEFEND;
             n.node = e->lastnode;
             n.target = e->clientnum;
@@ -504,7 +505,7 @@ namespace ai
             int attr = w_attr(game::gamemode, game::mutators, e.type, e.attrs[0], sweap);
             if(e.spawned() && isweap(attr) && wantsweap(d, attr))
             { // go get a weapon upgrade
-                interest &n = interests.add();
+                interest &n = (interests.emplace_back(  ), interests.back());
                 n.state = AI_S_INTEREST;
                 n.node = closestwaypoint(e.o, CLOSEDIST, true);
                 n.target = j;
@@ -514,16 +515,16 @@ namespace ai
             }
         }
 
-        loopvj(projs::projs) if(projs::projs[j]->projtype == PRJ_ENT && projs::projs[j]->ready())
+        for( size_t j = 0; j < projs::projs.size(); ++j ) if(projs::projs[j]->projtype == PRJ_ENT && projs::projs[j]->ready())
         {
             projent &proj = *projs::projs[j];
-            if(!entities::ents.inrange(proj.id)) continue;
+            if(!( 0 <= proj.id && proj.id < entities::ents.size() )) continue;
             gameentity &e = *(gameentity *)entities::ents[proj.id];
             if(enttype[e.type].usetype != EU_ITEM || e.type != WEAPON) continue;
             int attr = w_attr(game::gamemode, game::mutators, e.type, e.attrs[0], sweap);
             if(isweap(attr) && wantsweap(d, attr) && proj.owner != d)
             { // go get a weapon upgrade
-                interest &n = interests.add();
+                interest &n = (interests.emplace_back(  ), interests.back());
                 n.state = AI_S_INTEREST;
                 n.node = closestwaypoint(proj.o, CLOSEDIST, true);
                 n.target = proj.id;
@@ -536,7 +537,7 @@ namespace ai
 
     bool find(gameent *d, aistate &b)
     {
-        static vector<interest> interests; interests.setsize(0);
+        static vector<interest> interests; interests.clear();
         if(AA(d->actortype, abilities)&(1<<A_A_MOVE))
         {
             int sweap = m_weapon(d->actortype, game::gamemode, game::mutators);
@@ -545,11 +546,11 @@ namespace ai
             if(m_team(game::gamemode, game::mutators) && !m_duke(game::gamemode, game::mutators))
                 assist(d, b, interests, false, false);
         }
-        else if(entities::ents.inrange(d->spawnpoint)) loopv(entities::ents[d->spawnpoint]->links)
+        else if(( 0 <= d->spawnpoint && d->spawnpoint < entities::ents.size() )) for( size_t i = 0; i < entities::ents[d->spawnpoint]->links.size(); ++i )
         {
             int t = entities::ents[d->spawnpoint]->links[i];
-            if(!entities::ents.inrange(t)) continue;
-            interest &n = interests.add();
+            if(!( 0 <= t && t < entities::ents.size() )) continue;
+            interest &n = (interests.emplace_back(  ), interests.back());
             n.state = AI_S_DEFEND;
             n.target = t;
             n.node = closestwaypoint(entities::ents[t]->o, CLOSEDIST, true);
@@ -565,13 +566,13 @@ namespace ai
         }
         while(!interests.empty())
         {
-            int q = interests.length()-1;
-            loopi(interests.length()-1) if(interests[i].score < interests[q].score) q = i;
+            int q = interests.size()-1;
+            loopi(interests.size()-1) if(interests[i].score < interests[q].score) q = i;
             interest n = interests.removeunordered(q);
             if(d->actortype == A_BOT && m_play(game::gamemode) && m_team(game::gamemode, game::mutators))
             {
                 int members = 0;
-                static vector<int> targets; targets.setsize(0);
+                static vector<int> targets; targets.clear();
                 int others = checkothers(targets, d, n.state, n.targtype, n.target, n.team, &members);
                 if(d->actortype == A_BOT && n.state == AI_S_DEFEND && members == 1) continue;
                 if(others >= int(ceilf(members*n.tolerance))) continue;
@@ -588,17 +589,17 @@ namespace ai
     void damaged(gameent *d, gameent *e, int weap, int flags, int damage)
     {
         if(d == e) return;
-        if(d->ai && (d->actortype >= A_ENEMY || (hitdealt(flags) && damage > 0) || d->ai->enemy < 0 || d->dominating.find(e))) // see if this ai is interested in a grudge
+        if(d->ai && (d->actortype >= A_ENEMY || (hitdealt(flags) && damage > 0) || d->ai->enemy < 0 || find( d->dominating, e ))) // see if this ai is interested in a grudge
         {
             aistate &b = d->ai->getstate();
             violence(d, b, e, d->actortype != A_BOT || W2(d->weapselect, aidist, false) < CLOSEDIST ? 1 : 0);
         }
         static vector<int> targets; // check if one of our ai is defending them
-        targets.setsize(0);
+        targets.clear();
         if(checkothers(targets, d, AI_S_DEFEND, AI_T_ACTOR, d->clientnum, true))
         {
             gameent *t;
-            loopv(targets) if((t = game::getclient(targets[i])) && t->ai && t->actortype == A_BOT && ((hitdealt(flags) && damage > 0) || t->ai->enemy < 0 || t->dominating.find(e)))
+            for( size_t i = 0; i < targets.size(); ++i ) if((t = game::getclient(targets[i])) && t->ai && t->actortype == A_BOT && ((hitdealt(flags) && damage > 0) || t->ai->enemy < 0 || find( t->dominating, e )))
             {
                 aistate &c = t->ai->getstate();
                 violence(t, c, e, W2(d->weapselect, aidist, false) < CLOSEDIST ? 1 : 0);
@@ -630,8 +631,8 @@ namespace ai
 
     void itemspawned(int ent, int spawned)
     {
-        if(!m_play(game::gamemode) || !entities::ents.inrange(ent) || entities::ents[ent]->type != WEAPON || spawned <= 0) return;
-        loopv(game::players) if(game::players[i] && game::players[i]->ai && game::players[i]->actortype == A_BOT && game::players[i]->state == CS_ALIVE && iswaypoint(game::players[i]->lastnode))
+        if(!m_play(game::gamemode) || !( 0 <= ent && ent < entities::ents.size() ) || entities::ents[ent]->type != WEAPON || spawned <= 0) return;
+        for( size_t i = 0; i < game::players.size(); ++i ) if(game::players[i] && game::players[i]->ai && game::players[i]->actortype == A_BOT && game::players[i]->state == CS_ALIVE && iswaypoint(game::players[i]->lastnode))
         {
             gameent *d = game::players[i];
             aistate &b = d->ai->getstate();
@@ -641,7 +642,7 @@ namespace ai
             {
                 if(b.type == AI_S_INTEREST && (b.targtype == AI_T_ENTITY || b.targtype == AI_T_DROP))
                 {
-                    if(entities::ents.inrange(b.target))
+                    if(( 0 <= b.target && b.target < entities::ents.size() ))
                     {
                         int weap = w_attr(game::gamemode, game::mutators, entities::ents[ent]->type, entities::ents[b.target]->attrs[0], sweap);
                         if(isweap(attr) && ((attr == weappref(d) && weap != weappref(d)) || d->o.squaredist(entities::ents[ent]->o) < d->o.squaredist(entities::ents[b.target]->o)))
@@ -687,7 +688,7 @@ namespace ai
             case AI_T_ENTITY:
             {
                 if(check(d, b)) return true;
-                if(entities::ents.inrange(b.target)) return defense(d, b, entities::ents[b.target]->o);
+                if(( 0 <= b.target && b.target < entities::ents.size() )) return defense(d, b, entities::ents[b.target]->o);
                 break;
             }
             case AI_T_AFFINITY:
@@ -725,7 +726,7 @@ namespace ai
         {
             case AI_T_ENTITY:
             {
-                if(entities::ents.inrange(b.target))
+                if(( 0 <= b.target && b.target < entities::ents.size() ))
                 {
                     gameentity &e = *(gameentity *)entities::ents[b.target];
                     if(enttype[e.type].usetype != EU_ITEM || e.type != WEAPON) return false;
@@ -737,10 +738,10 @@ namespace ai
             }
             case AI_T_DROP:
             {
-                loopvj(projs::projs) if(projs::projs[j]->projtype == PRJ_ENT && projs::projs[j]->ready() && projs::projs[j]->id == b.target)
+                for( size_t j = 0; j < projs::projs.size(); ++j ) if(projs::projs[j]->projtype == PRJ_ENT && projs::projs[j]->ready() && projs::projs[j]->id == b.target)
                 {
                     projent &proj = *projs::projs[j];
-                    if(!entities::ents.inrange(proj.id) || proj.owner == d) return false;
+                    if(!( 0 <= proj.id && proj.id < entities::ents.size() ) || proj.owner == d) return false;
                     gameentity &e = *(gameentity *)entities::ents[proj.id];
                     if(enttype[entities::ents[proj.id]->type].usetype != EU_ITEM || e.type != WEAPON) return false;
                     int sweap = m_weapon(d->actortype, game::gamemode, game::mutators), attr = w_attr(game::gamemode, game::mutators, e.type, e.attrs[0], sweap);
@@ -866,7 +867,7 @@ namespace ai
         vec pos = d->feetpos();
         int node1 = -1, node2 = -1, node3 = -1;
         float mindist1 = CLOSEDIST*CLOSEDIST, mindist2 = RETRYDIST*RETRYDIST, mindist3 = mindist2;
-        loopv(d->ai->route) if(iswaypoint(d->ai->route[i]))
+        for( size_t i = 0; i < d->ai->route.size(); ++i ) if(iswaypoint(d->ai->route[i]))
         {
             vec epos = waypoints[d->ai->route[i]].o;
             float dist = epos.squaredist(pos);
@@ -911,14 +912,14 @@ namespace ai
         if(iswaypoint(n) && waypoints[n].haslinks())
         {
             waypoint &w = waypoints[n];
-            static vector<int> linkmap; linkmap.setsize(0);
+            static std::vector<int> linkmap; linkmap.clear();
             loopi(MAXWAYPOINTLINKS)
             {
                 if(!w.links[i]) break;
-                if(iswaypoint(w.links[i]) && !d->ai->hasprevnode(w.links[i]) && d->ai->route.find(w.links[i]) < 0)
-                    linkmap.add(w.links[i]);
+                if(iswaypoint(w.links[i]) && !d->ai->hasprevnode(w.links[i]) && find( d->ai->route, w.links[i] ) < 0)
+                    linkmap.emplace_back( w.links[i] );
             }
-            if(!linkmap.empty()) return linkmap[rnd(linkmap.length())];
+            if(!linkmap.empty()) return linkmap[rnd(linkmap.size())];
         }
         return -1;
     }
@@ -931,12 +932,12 @@ namespace ai
             int n = randomlink(d, d->lastnode);
             if(wpspot(d, n))
             {
-                d->ai->route.add(n);
-                d->ai->route.add(d->lastnode);
+                d->ai->route.emplace_back( n );
+                d->ai->route.emplace_back( d->lastnode );
                 loopi(len)
                 {
                     n = randomlink(d, n);
-                    if(iswaypoint(n)) d->ai->route.insert(0, n);
+                    if(iswaypoint(n)) d->ai->route.insert(0, n );
                     else break;
                 }
                 return true;
@@ -947,8 +948,8 @@ namespace ai
 
     bool checkroute(gameent *d, int n)
     {
-        if(d->ai->route.empty() || !d->ai->route.inrange(n)) return false;
-        int len = d->ai->route.length();
+        if(d->ai->route.empty() || !( 0 <= n && n < d->ai->route.size() )) return false;
+        int len = d->ai->route.size();
         if(len <= 2 || (d->ai->lastcheck && lastmillis-d->ai->lastcheck <= 500)) return false;
         int w = iswaypoint(d->lastnode) ? d->lastnode : d->ai->route[n], c = min(len, NUMPREVNODES);
         if(c >= 3) loopj(c) // check ahead to see if we need to go around something
@@ -964,11 +965,11 @@ namespace ai
                     int q = j+i+1, t = d->ai->route[q];
                     if(!d->ai->hasprevnode(t) && !obstacles.find(t, d))
                     {
-                        static vector<int> remap; remap.setsize(0);
+                        static vector<int> remap; remap.clear();
                         if(route(d, w, t, remap, obstacles))
                         { // kill what we don't want and put the remap in
-                            while(d->ai->route.length() > i) d->ai->route.pop();
-                            loopvk(remap) d->ai->route.add(remap[k]);
+                            while(d->ai->route.size() > i) (d->ai->route.back(),d->ai->route.pop_back());
+                            for( size_t k = 0; k < remap.size(); ++k ) d->ai->route.emplace_back( remap[k] );
                             return true;
                         }
                         return false; // we failed
@@ -985,8 +986,8 @@ namespace ai
         if(!d->ai->route.empty())
         {
             int n = closenode(d);
-            if(d->ai->route.inrange(n) && checkroute(d, n)) n = closenode(d);
-            if(d->ai->route.inrange(n))
+            if(( 0 <= n && n < d->ai->route.size() ) && checkroute(d, n)) n = closenode(d);
+            if(( 0 <= n && n < d->ai->route.size() ))
             {
                 if(!n)
                 {
@@ -999,9 +1000,9 @@ namespace ai
                 }
                 else
                 {
-                    while(d->ai->route.length() > n+1) d->ai->route.pop(); // waka-waka-waka-waka
+                    while(d->ai->route.size() > n+1) (d->ai->route.back(),d->ai->route.pop_back()); // waka-waka-waka-waka
                     int m = n-1; // next, please!
-                    if(d->ai->route.inrange(m) && wpspot(d, d->ai->route[m])) return true;
+                    if(( 0 <= m && m < d->ai->route.size() ) && wpspot(d, d->ai->route[m])) return true;
                 }
             }
         }
@@ -1072,7 +1073,7 @@ namespace ai
     {
         int skmod = max(101-d->skill, 1);
         float frame = d->skill <= 100 ? ((lastmillis-d->ai->lastrun)*(100.f/gamespeed))/float(skmod*10) : 1;
-        if(d->dominating.length()) frame *= 1+d->dominating.length();
+        if(d->dominating.size()) frame *= 1+d->dominating.size();
         bool dancing = b.type == AI_S_OVERRIDE && b.overridetype == AI_O_DANCE,
              allowrnd = dancing || b.type == AI_S_WAIT || b.type == AI_S_PURSUE || b.type == AI_S_INTEREST;
         d->action[AC_SPECIAL] = d->ai->dontmove = false;
@@ -1086,7 +1087,7 @@ namespace ai
         {
             vec fp = d->feetpos();
             game::getyawpitch(fp, d->ai->spot, d->ai->targyaw, d->ai->targpitch);
-            if(d->ai->route.length() <= 1 && d->ai->spot.squaredist(fp) <= MINWPDIST*MINWPDIST) d->ai->dontmove = true;
+            if(d->ai->route.size() <= 1 && d->ai->spot.squaredist(fp) <= MINWPDIST*MINWPDIST) d->ai->dontmove = true;
         }
         else
         {
@@ -1255,20 +1256,20 @@ namespace ai
             if(haswaited && !firing && !d->action[AC_USE])
             {
                 static vector<actitem> actitems;
-                actitems.setsize(0);
+                actitems.clear();
                 vec pos = d->center();
                 float radius = max(d->height*0.5f, max(d->xradius, d->yradius));
                 if(entities::collateitems(d, pos, radius, actitems))
                 {
                     while(!actitems.empty())
                     {
-                        actitem &t = actitems.last();
+                        actitem &t = actitems.back();
                         int ent = -1;
                         switch(t.type)
                         {
                             case actitem::ENT:
                             {
-                                if(!entities::ents.inrange(t.target)) break;
+                                if(!( 0 <= t.target && t.target < entities::ents.size() )) break;
                                 extentity &e = *entities::ents[t.target];
                                 if(enttype[e.type].usetype != EU_ITEM || e.type != WEAPON) break;
                                 ent = t.target;
@@ -1276,9 +1277,9 @@ namespace ai
                             }
                             case actitem::PROJ:
                             {
-                                if(!projs::projs.inrange(t.target)) break;
+                                if(!( 0 <= t.target && t.target < projs::projs.size() )) break;
                                 projent &proj = *projs::projs[t.target];
-                                if(!entities::ents.inrange(proj.id)) break;
+                                if(!( 0 <= proj.id && proj.id < entities::ents.size() )) break;
                                 extentity &e = *entities::ents[proj.id];
                                 if(enttype[e.type].usetype != EU_ITEM || e.type != WEAPON || proj.owner == d) break;
                                 ent = proj.id;
@@ -1286,7 +1287,7 @@ namespace ai
                             }
                             default: break;
                         }
-                        if(entities::ents.inrange(ent))
+                        if(( 0 <= ent && ent < entities::ents.size() ))
                         {
                             extentity &e = *entities::ents[ent];
                             int attr = w_attr(game::gamemode, game::mutators, e.type, e.attrs[0], sweap);
@@ -1298,7 +1299,7 @@ namespace ai
                                 return true;
                             }
                         }
-                        actitems.pop();
+                        (actitems.back(),actitems.pop_back());
                     }
                 }
             }
@@ -1337,13 +1338,13 @@ namespace ai
     bool transport(gameent *d, int find = 0)
     {
         vec pos = d->feetpos();
-        static vector<int> candidates; candidates.setsize(0);
+        static vector<int> candidates; candidates.clear();
         if(find) findwaypointswithin(pos, WAYPOINTRADIUS, RETRYDIST*find, candidates);
-        if(find ? !candidates.empty() : !d->ai->route.empty()) loopk(2)
+        if(!(find ? candidates.empty() : d->ai->route.empty())) loopk(2)
         {
             int best = -1;
             float dist = 1e16f;
-            loopv(find ? candidates : d->ai->route)
+            for( size_t i = 0; i < (find ? candidates : d->ai->route).size(); ++i )
             {
                 int n = find ? candidates[i] : d->ai->route[i];
                 if((k || (!d->ai->hasprevnode(n) && n != d->lastnode)) && !obstacles.find(n, d))
@@ -1481,7 +1482,7 @@ namespace ai
             if(d->state != CS_ALIVE || !physics::issolid(d)) continue;
             obstacles.avoidnear(d, d->o.z + d->aboveeye + 1, d->feetpos(), guessradius + d->radius + 1);
         }
-        loopv(projs::projs)
+        for( size_t i = 0; i < projs::projs.size(); ++i )
         {
             projent *p = projs::projs[i];
             if(p && p->state == CS_ALIVE && p->projtype == PRJ_SHOT)
@@ -1516,7 +1517,7 @@ namespace ai
         // it or pops the stack and goes back along the history until it finds a suitable command to execute
         bool cleannext = false;
         if(d->ai->state.empty()) d->ai->addstate(AI_S_WAIT);
-        loopvrev(d->ai->state)
+        for( ssize_t i = d->ai->state.size() - 1; i >= 0; --i )
         {
             aistate &c = d->ai->state[i];
             if(c.owner >= 0)
@@ -1568,9 +1569,9 @@ namespace ai
     void drawroute(gameent *d, float amt)
     {
         int colour = game::getcolour(d, game::playerdisplaytone, game::playerdisplaytonelevel), last = -1;
-        loopvrev(d->ai->route)
+        for( ssize_t i = d->ai->route.size() - 1; i >= 0; --i )
         {
-            if(d->ai->route.inrange(last))
+            if(( 0 <= last && last < d->ai->route.size() ))
             {
                 int index = d->ai->route[i], prev = d->ai->route[last];
                 if(iswaypoint(index) && iswaypoint(prev))
@@ -1609,8 +1610,8 @@ namespace ai
         if(aidebug >= 2)
         {
             int total = 0, alive = 0;
-            loopv(game::players) if(game::players[i] && dbgfocus(game::players[i])) total++;
-            loopv(game::players) if(game::players[i] && game::players[i]->state == CS_ALIVE && dbgfocus(game::players[i]))
+            for( size_t i = 0; i < game::players.size(); ++i ) if(game::players[i] && dbgfocus(game::players[i])) total++;
+            for( size_t i = 0; i < game::players.size(); ++i ) if(game::players[i] && game::players[i]->state == CS_ALIVE && dbgfocus(game::players[i]))
             {
                 gameent *d = game::players[i];
                 vec pos = d->abovehead();
@@ -1622,13 +1623,13 @@ namespace ai
                     defformatstring(q, "node: %d route: %d (%d)",
                         d->lastnode,
                         !d->ai->route.empty() ? d->ai->route[0] : -1,
-                        d->ai->route.length()
+                        d->ai->route.size()
                     );
                     part_textcopy(pos, q);
                     pos.z += 2;
                 }
                 bool top = true;
-                loopvrev(d->ai->state)
+                for( ssize_t i = d->ai->state.size() - 1; i >= 0; --i )
                 {
                     aistate &b = d->ai->state[i];
                     gameent *e = b.owner >= 0 ? game::getclient(b.owner) : NULL;
@@ -1666,7 +1667,7 @@ namespace ai
             if(aidebug >= 4)
             {
                 int cur = 0;
-                loopv(obstacles.obstacles)
+                for( size_t i = 0; i < obstacles.obstacles.size(); ++i )
                 {
                     const avoidset::obstacle &ob = obstacles.obstacles[i];
                     int next = cur + ob.numwaypoints;
@@ -1683,11 +1684,11 @@ namespace ai
         if(showwaypoints || (dropwaypoints && showwaypointsdrop) || aidebug >= 7)
         {
             vector<int> close;
-            int len = waypoints.length(), col = vec::hexcolor(showwaypointscolour).mul(0.5f).tohexcolor();
+            int len = waypoints.size(), col = vec::hexcolor(showwaypointscolour).mul(0.5f).tohexcolor();
             if(showwaypointsradius)
             {
                 findwaypointswithin(camera1->o, 0, showwaypointsradius, close);
-                len = close.length();
+                len = close.size();
             }
             loopi(len)
             {
@@ -1738,7 +1739,7 @@ namespace ai
             if(s) w[i] = s;
             else numargs = i;
         }
-        if(*w[0]) loopvj(game::players) if(game::players[j] && game::players[j]->actortype == A_BOT && game::players[j]->ai)
+        if(*w[0]) for( size_t j = 0; j < game::players.size(); ++j ) if(game::players[j] && game::players[j]->actortype == A_BOT && game::players[j]->ai)
         {
             gameent *e = game::players[j];
             int pos = 0;
@@ -1805,7 +1806,7 @@ namespace ai
                             {
                                 if(!strcasecmp(w[pos], "flag"))
                                 {
-                                    loopv(capture::st.flags) if(capture::st.flags[i].team == e->team)
+                                    for( size_t i = 0; i < capture::st.flags.size(); ++i ) if(capture::st.flags[i].team == e->team)
                                     {
                                         e->ai->clear();
                                         e->ai->addstate(AI_S_DEFEND, AI_T_AFFINITY, i, AI_A_PROTECT, d->clientnum);
@@ -1816,7 +1817,7 @@ namespace ai
                                 #if 0
                                 else if(!strcasecmp(w[pos], "base"))
                                 {
-                                    loopv(capture::st.flags) if(capture::st.flags[i].team == e->team)
+                                    for( size_t i = 0; i < capture::st.flags.size(); ++i ) if(capture::st.flags[i].team == e->team)
                                     {
                                         e->ai->clear();
                                         e->ai->addstate(AI_S_DEFEND, AI_T_ENTITY, capture::st.flags[i].ent, AI_A_PROTECT, d->clientnum);
@@ -1832,7 +1833,7 @@ namespace ai
                             {
                                 if(!strcasecmp(w[pos], "goal") || !strcasecmp(w[pos], "base"))
                                 {
-                                    loopv(bomber::st.flags) if(!isbomberaffinity(bomber::st.flags[i]) && bomber::st.flags[i].team == e->team)
+                                    for( size_t i = 0; i < bomber::st.flags.size(); ++i ) if(!isbomberaffinity(bomber::st.flags[i]) && bomber::st.flags[i].team == e->team)
                                     {
                                         e->ai->clear();
                                         e->ai->addstate(AI_S_DEFEND, AI_T_AFFINITY, i, AI_A_PROTECT, d->clientnum);
@@ -1858,7 +1859,7 @@ namespace ai
                     {
                         if(!strcasecmp(w[pos], "flag"))
                         {
-                            loopv(capture::st.flags) if(capture::st.flags[i].team != e->team)
+                            for( size_t i = 0; i < capture::st.flags.size(); ++i ) if(capture::st.flags[i].team != e->team)
                             {
                                 e->ai->clear();
                                 e->ai->addstate(AI_S_PURSUE, AI_T_AFFINITY, i, AI_A_HASTE, d->clientnum);
@@ -1869,7 +1870,7 @@ namespace ai
                         #if 0
                         else if(!strcasecmp(w[pos], "base"))
                         {
-                            loopv(capture::st.flags) if(capture::st.flags[i].team != e->team)
+                            for( size_t i = 0; i < capture::st.flags.size(); ++i ) if(capture::st.flags[i].team != e->team)
                             {
                                 e->ai->clear();
                                 e->ai->addstate(AI_S_DEFEND, AI_T_ENTITY, capture::st.flags[i].ent, AI_A_HASTE, d->clientnum);
@@ -1886,7 +1887,7 @@ namespace ai
                     {
                         if(!strcasecmp(w[pos], "goal") || !strcasecmp(w[pos], "base"))
                         {
-                            loopv(bomber::st.flags) if(!isbomberaffinity(bomber::st.flags[i]) && bomber::st.flags[i].team != e->team)
+                            for( size_t i = 0; i < bomber::st.flags.size(); ++i ) if(!isbomberaffinity(bomber::st.flags[i]) && bomber::st.flags[i].team != e->team)
                             {
                                 e->ai->clear();
                                 e->ai->addstate(AI_S_PURSUE, AI_T_AFFINITY, i, AI_A_HASTE, d->clientnum);
@@ -1896,7 +1897,7 @@ namespace ai
                         }
                         else if(!strcasecmp(w[pos], "ball") || !strcasecmp(w[pos], "bomb"))
                         {
-                            loopv(bomber::st.flags) if(isbomberaffinity(bomber::st.flags[i]))
+                            for( size_t i = 0; i < bomber::st.flags.size(); ++i ) if(isbomberaffinity(bomber::st.flags[i]))
                             {
                                 e->ai->clear();
                                 e->ai->addstate(AI_S_PURSUE, AI_T_AFFINITY, i, AI_A_HASTE, d->clientnum);
@@ -1957,7 +1958,7 @@ namespace ai
             }
             else if(!strcasecmp(w[pos], "forget"))
             {
-                loopvrev(e->ai->state) if(e->ai->state[i].owner == d->clientnum) e->ai->state.remove(i);
+                for( ssize_t i = e->ai->state.size() - 1; i >= 0; --i ) if(e->ai->state[i].owner == d->clientnum) e->ai->state.erase( e->ai->state.begin() + i );
                 const char *quip[4] = { "back to what i was doing then", "resuming previous operations", "i am no longer your slave", "jolly good show then" };
                 botsay(e, d, "%s, %s", affirm[rnd(4)], quip[rnd(4)]);
             }
