@@ -1,3 +1,4 @@
+#include <vector>
 #include <algorithm>
 using std::swap;
 #include "game.h"
@@ -5,7 +6,7 @@ namespace entities
 {
     vector<extentity *> ents;
     int lastenttype[MAXENTTYPES], lastusetype[EU_MAX], numactors = 0, lastroutenode = -1, lastroutefloor = -1, lastroutetime = 0;
-    vector<int> airnodes;
+    std::vector<int> airnodes;
 
     VAR(IDF_PERSIST, showlighting, 0, 0, 1);
     VAR(IDF_PERSIST, showentmodels, 0, 1, 2);
@@ -28,15 +29,15 @@ namespace entities
     FVAR(IDF_PERSIST, haloitemsize, 0, 1, 8);
     FVAR(IDF_PERSIST, haloitemblend, 0, 0.75f, 1);
 
-    VARF(0, routeid, -1, -1, VAR_MAX, lastroutenode = -1; lastroutetime = 0; airnodes.setsize(0)); // selected route in race
-    VARF(0, droproute, 0, 0, 1, lastroutenode = -1; lastroutetime = 0; airnodes.setsize(0); if(routeid < 0) routeid = 0);
+    VARF(0, routeid, -1, -1, VAR_MAX, lastroutenode = -1; lastroutetime = 0; airnodes.clear()); // selected route in race
+    VARF(0, droproute, 0, 0, 1, lastroutenode = -1; lastroutetime = 0; airnodes.clear(); if(routeid < 0) routeid = 0);
     VAR(IDF_HEX, routecolour, 0, 0xFF22FF, 0xFFFFFF);
     VAR(0, droproutedist, 1, 16, VAR_MAX);
     VAR(0, routemaxdist, 0, 64, VAR_MAX);
 
     vector<extentity *> &getents() { return ents; }
-    int lastent(int type) { return type >= 0 && type < MAXENTTYPES ? clamp(lastenttype[type], 0, ents.length()) : 0; }
-    int lastuse(int type) { return type >= 0 && type < MAXENTTYPES ? clamp(lastusetype[type], 0, ents.length()) : 0; }
+    int lastent(int type) { return type >= 0 && type < MAXENTTYPES ? clamp(lastenttype[type], 0, ents.size()) : 0; }
+    int lastuse(int type) { return type >= 0 && type < MAXENTTYPES ? clamp(lastusetype[type], 0, ents.size()) : 0; }
 
     int numattrs(int type) { return type >= 0 && type < MAXENTTYPES ? enttype[type].numattrs : 0; }
     ICOMMAND(0, entityattrs, "b", (int *n), intret(numattrs(*n)));
@@ -93,15 +94,15 @@ namespace entities
 
     int triggertime(int n)
     {
-        if(ents.inrange(n)) return triggertime(*ents[n]);
+        if(( 0 <= n && n < ents.size() )) return triggertime(*ents[n]);
         return 0;
     }
     ICOMMAND(0, entitytriggertime, "b", (int *n), intret(triggertime(*n)));
 
     void getentity(int id, int val, int ex)
     {
-        if(id < 0) intret(ents.length());
-        else if(ents.inrange(id))
+        if(id < 0) intret(ents.size());
+        else if(( 0 <= id && id < ents.size() ))
         {
             if(val < 0) intret(3);
             else switch(val)
@@ -109,14 +110,14 @@ namespace entities
                 case 0: intret(ents[id]->type); break; // type
                 case 1: // attrs
                 {
-                    if(ex < 0) intret(ents[id]->attrs.length());
-                    else if(ents[id]->attrs.inrange(ex)) intret(ents[id]->attrs[ex]);
+                    if(ex < 0) intret(ents[id]->attrs.size());
+                    else if(( 0 <= ex && ex < ents[id]->attrs.size() )) intret(ents[id]->attrs[ex]);
                     break;
                 }
                 case 2: // links
                 {
-                    if(ex < 0) intret(ents[id]->links.length());
-                    else if(ents[id]->links.inrange(ex)) intret(ents[id]->links[ex]);
+                    if(ex < 0) intret(ents[id]->links.size());
+                    else if(( 0 <= ex && ex < ents[id]->links.size() )) intret(ents[id]->links[ex]);
                     break;
                 }
             }
@@ -302,9 +303,9 @@ namespace entities
             }
             case MAPSOUND:
             {
-                if(mapsounds.inrange(attr[0]))
+                if(( 0 <= attr[0] && attr[0] < mapsounds.size() ))
                 {
-                    int samples = mapsounds[attr[0]].samples.length();
+                    int samples = mapsounds[attr[0]].samples.size();
                     defformatstring(ds, "%s (%d %s)", mapsounds[attr[0]].name, samples, samples == 1 ? "sample" : "samples");
                     addentinfo(ds);
                 }
@@ -388,7 +389,7 @@ namespace entities
     void checkspawns(int n)
     {
         gameentity &e = *(gameentity *)ents[n];
-        if(enttype[e.type].usetype == EU_ITEM) loopv(projs::projs)
+        if(enttype[e.type].usetype == EU_ITEM) for( size_t i = 0; i < projs::projs.size(); ++i )
         {
             projent &proj = *projs::projs[i];
             if(proj.projtype != PRJ_ENT || proj.id != n) continue;
@@ -416,7 +417,7 @@ namespace entities
         d->useitem(ent, e.type, attr, ammoamt, sweap, lastmillis, weaponswitchdelay);
         playsound(e.type == WEAPON && attr >= W_OFFSET && attr < W_ALL ? WSND(attr, S_W_USE) : S_ITEMUSE, d->o, d, 0, -1, -1, -1, &d->wschan);
         if(game::dynlighteffects) adddynlight(d->center(), enttype[e.type].radius*2, vec::hexcolor(colour).mul(2.f), 250, 250);
-        if(ents.inrange(drop) && ents[drop]->type == WEAPON)
+        if(( 0 <= drop && drop < ents.size() ) && ents[drop]->type == WEAPON)
         {
             gameentity &f = *(gameentity *)ents[drop];
             attr = w_attr(game::gamemode, game::mutators, f.type, f.attrs[0], sweap);
@@ -431,10 +432,10 @@ namespace entities
     }
 
     /*
-    static inline void collateents(octaentities &oe, const vec &pos, float xyrad, float zrad, bool alive, vector<actitem> &actitems)
+    static inline void collateents(octaentities &oe, const vec &pos, float xyrad, float zrad, bool alive, std::vector<actitem> &actitems)
     {
-        vector<extentity *> &ents = entities::getents();
-        loopv(oe.other)
+        std::vector<extentity *> &ents = entities::getents();
+        for( size_t i = 0; i < oe.other.size(); ++i )
         {
             int n = oe.other[i];
             extentity &e = *ents[n];
@@ -448,7 +449,7 @@ namespace entities
                 }
                 if(overlapsbox(pos, zrad, xyrad, e.o, radius, radius))
                 {
-                    actitem &t = actitems.add();
+                    actitem &t = (actitems.emplace_back(  ), actitems.back());
                     t.type = actitem::ENT;
                     t.target = n;
                     t.score = pos.squaredist(e.o);
@@ -457,7 +458,7 @@ namespace entities
         }
     }
 
-    static inline void collateents(cube *c, const ivec &o, int size, const ivec &bo, const ivec &br, const vec &pos, float xyrad, float zrad, bool alive, vector<actitem> &actitems)
+    static inline void collateents(cube *c, const ivec &o, int size, const ivec &bo, const ivec &br, const vec &pos, float xyrad, float zrad, bool alive, std::vector<actitem> &actitems)
     {
         loopoctabox(o, size, bo, br)
         {
@@ -470,10 +471,10 @@ namespace entities
         }
     }
 
-    void collateents(const vec &pos, float xyrad, float zrad, bool alive, vector<actitem> &actitems)
+    void collateents(const vec &pos, float xyrad, float zrad, bool alive, std::vector<actitem> &actitems)
     {
         ivec bo = vec(pos).sub(vec(xyrad, xyrad, zrad)),
-             br = vec(pos).add(vec(xyrad, xyrad, zrad)).add(1);
+             br = vec(pos).add(vec(xyrad, xyrad, zrad)).emplace_back( 1 );
         int diff = (bo.x^br.x) | (bo.y^br.y) | (bo.z^br.z) | octaentsize,
             scale = worldscale-1;
         if(diff&~((1<<scale)-1) || uint(bo.x|bo.y|bo.z|br.x|br.y|br.z) >= uint(hdr.worldsize))
@@ -501,7 +502,7 @@ namespace entities
 
     bool collateitems(dynent *d, vec &pos, float radius, vector<actitem> &actitems)
     {
-        loopv(ents)
+        for( size_t i = 0; i < ents.size(); ++i )
         {
             extentity &e = *ents[i];
             if(enttype[e.type].usetype != EU_NONE && (enttype[e.type].usetype != EU_ITEM || (d->state == CS_ALIVE && e.spawned())))
@@ -514,17 +515,17 @@ namespace entities
                 }
                 float diff = edist-radius;
                 if(diff > eradius) continue;
-                actitem &t = actitems.add();
+                actitem &t = (actitems.emplace_back(  ), actitems.back());
                 t.type = actitem::ENT;
                 t.target = i;
                 t.score = diff;
             }
         }
-        if(d->state == CS_ALIVE) loopv(projs::projs)
+        if(d->state == CS_ALIVE) for( size_t i = 0; i < projs::projs.size(); ++i )
         {
             projent &proj = *projs::projs[i];
             if(proj.projtype != PRJ_ENT || !proj.ready()) continue;
-            if(!ents.inrange(proj.id) || enttype[ents[proj.id]->type].usetype != EU_ITEM) continue;
+            if(!( 0 <= proj.id && proj.id < ents.size() ) || enttype[ents[proj.id]->type].usetype != EU_ITEM) continue;
             if(!(enttype[ents[proj.id]->type].canuse&(1<<d->type))) continue;
             //if(!overlapsbox(m, eye, d->radius, proj.o, enttype[ents[proj.id]->type].radius, enttype[ents[proj.id]->type].radius))
             //    continue;
@@ -536,14 +537,14 @@ namespace entities
             }
             float diff = edist-radius;
             if(diff > eradius) continue;
-            actitem &t = actitems.add();
+            actitem &t = (actitems.emplace_back(  ), actitems.back());
             t.type = actitem::PROJ;
             t.target = i;
             t.score = diff;
         }
         if(!actitems.empty())
         {
-            actitems.sort(sortitems); // sort items so last is closest
+            std::sort( actitems.begin(), actitems.end(), sortitems ); // sort items so last is closest
             return true;
         }
         return false;
@@ -661,17 +662,17 @@ namespace entities
                     int millis = d->lastused(n, true);
                     if(millis && lastmillis-millis < triggertime(e)) break;
                     e.lastemit = lastmillis;
-                    static vector<int> teleports;
-                    teleports.shrink(0);
-                    loopv(e.links)
-                        if(e.links[i] != n && ents.inrange(e.links[i]) && ents[e.links[i]]->type == e.type)
-                            teleports.add(e.links[i]);
+                    static std::vector<int> teleports;
+                    teleports.clear();
+                    for( size_t i = 0; i < e.links.size(); ++i )
+                        if(e.links[i] != n && ( 0 <= e.links[i] && e.links[i] < ents.size() ) && ents[e.links[i]]->type == e.type)
+                            teleports.emplace_back( e.links[i] );
                     if(teleports.empty()) break;
                     vec orig = d->o, ovel = d->vel;
                     float oyaw = d->yaw, opitch = d->pitch;
                     while(!teleports.empty())
                     {
-                        int r = rnd(teleports.length()), q = teleports[r];
+                        int r = rnd(teleports.size()), q = teleports[r];
                         gameentity &f = *(gameentity *)ents[q];
                         d->o = vec(f.o).add(f.attrs[5] >= 3 ? vec(orig).sub(e.o) : vec(0, 0, d->height*0.5f));
                         float mag = f.attrs[2] < 0 ? 0.f : max(vec(d->vel).add(d->falling).magnitude(), f.attrs[2] ? float(f.attrs[2]) : 50.f),
@@ -732,7 +733,7 @@ namespace entities
                         d->vel = ovel;
                         d->yaw = oyaw;
                         d->pitch = opitch;
-                        teleports.remove(r); // must've really sucked, try another one
+                        teleports.erase( teleports.begin() + r ); // must've really sucked, try another one
                     }
                     if(d->state == CS_ALIVE)
                     {
@@ -831,7 +832,7 @@ namespace entities
     void checkitems(dynent *d)
     {
         static vector<actitem> actitems;
-        actitems.setsize(0);
+        actitems.clear();
         vec pos = d->center();
         float radius = max(d->xradius, d->yradius);
         if(gameent::is(d)) radius = max(d->height*0.5f, radius);
@@ -840,21 +841,21 @@ namespace entities
             bool tried = false;
             while(!actitems.empty())
             {
-                actitem &t = actitems.last();
+                actitem &t = actitems.back();
                 int ent = -1;
                 float dist = 0;
                 switch(t.type)
                 {
                     case actitem::ENT:
                     {
-                        if(!ents.inrange(t.target)) break;
+                        if(!( 0 <= t.target && t.target < ents.size() )) break;
                         ent = t.target;
                         dist = t.score;
                         break;
                     }
                     case actitem::PROJ:
                     {
-                        if(!projs::projs.inrange(t.target)) break;
+                        if(!( 0 <= t.target && t.target < projs::projs.size() )) break;
                         projent &proj = *projs::projs[t.target];
                         ent = proj.id;
                         dist = t.score;
@@ -862,8 +863,8 @@ namespace entities
                     }
                     default: break;
                 }
-                if(ents.inrange(ent) && execitem(ent, d, pos, dist)) tried = true;
-                actitems.pop();
+                if(( 0 <= ent && ent < ents.size() ) && execitem(ent, d, pos, dist)) tried = true;
+                (actitems.back(),actitems.pop_back());
             }
             if(tried && gameent::is(d))
             {
@@ -879,7 +880,7 @@ namespace entities
 
     void putitems(packetbuf &p)
     {
-        loopv(ents)
+        for( size_t i = 0; i < ents.size(); ++i )
         {
             if(i >= MAXENTS) break;
             if(enttype[ents[i]->type].syncs)
@@ -887,8 +888,8 @@ namespace entities
                 gameentity &e = *(gameentity *)ents[i];
                 putint(p, i);
                 putint(p, int(e.type));
-                putint(p, min(e.attrs.length(), MAXENTATTRS));
-                loopvj(e.attrs)
+                putint(p, min(e.attrs.size(), MAXENTATTRS));
+                for( size_t j = 0; j < e.attrs.size(); ++j )
                 {
                     if(j >= MAXENTATTRS) break;
                     putint(p, e.attrs[j]);
@@ -896,8 +897,8 @@ namespace entities
                 if(enttype[e.type].syncpos) loopj(3) putint(p, int(e.o[j]*DMF));
                 if(enttype[e.type].synckin)
                 {
-                    putint(p, min(e.kin.length(), MAXENTKIN));
-                    loopvj(e.kin)
+                    putint(p, min(e.kin.size(), MAXENTKIN));
+                    for( size_t j = 0; j < e.kin.size(); ++j )
                     {
                         if(j >= MAXENTKIN) break;
                         putint(p, e.kin[j]);
@@ -909,7 +910,7 @@ namespace entities
 
     void setspawn(int n, int m)
     {
-        if(ents.inrange(n))
+        if(( 0 <= n && n < ents.size() ))
         {
             gameentity &e = *(gameentity *)ents[n];
             bool on = m%2, spawned = e.spawned();
@@ -928,7 +929,7 @@ namespace entities
                     }
                     else e.lastemit = lastmillis;
                     execlink(NULL, n, false);
-                    loopv(e.kin) if(ents.inrange(e.kin[i]))
+                    for( size_t i = 0; i < e.kin.size(); ++i ) if(( 0 <= e.kin[i] && e.kin[i] < ents.size() ))
                     {
                         gameentity &f = *(gameentity *)ents[e.kin[i]];
                         if(!cantrigger(e.kin[i])) continue;
@@ -947,7 +948,7 @@ namespace entities
 
     void clearents()
     {
-        while(ents.length()) deleteent(ents.pop());
+        while(ents.size()) {deleteent(ents.back());ents.pop_back();}
         memset(lastenttype, 0, sizeof(lastenttype));
         memset(lastusetype, 0, sizeof(lastusetype));
     }
@@ -955,8 +956,8 @@ namespace entities
     bool cansee(int n)
     {
         if(game::player1->state != CS_EDITING && !(showentinfo&64)) return false;
-        if(!ents.inrange(n)) return false;
-        if(ents[n]->type == NOTUSED && (n != enthover && entgroup.find(n) < 0)) return false;
+        if(!( 0 <= n && n < ents.size() )) return false;
+        if(ents[n]->type == NOTUSED && (n != enthover && find( entgroup, n ) < 0)) return false;
         return true;
     }
 
@@ -964,18 +965,18 @@ namespace entities
     {
         gameentity &e = *(gameentity *)ents[n];
         int num = max(5, enttype[e.type].numattrs);
-        if(e.attrs.length() < num) e.attrs.add(0, num - e.attrs.length());
-        else if(e.attrs.length() > num) e.attrs.setsize(num);
-        loopvrev(e.links)
+        if(e.attrs.size() < num) e.attrs.add(0, num - e.attrs.size());
+        else if(e.attrs.size() > num) e.attrs.resize( num );
+        for( ssize_t i = e.links.size() - 1; i >= 0; --i )
         {
             int ent = e.links[i];
-            if(!canlink(n, ent, verbose >= 2)) e.links.remove(i);
-            else if(ents.inrange(ent))
+            if(!canlink(n, ent, verbose >= 2)) e.links.erase( e.links.begin() + i );
+            else if(( 0 <= ent && ent < ents.size() ))
             {
                 gameentity &f = *(gameentity *)ents[ent];
-                if(((enttype[e.type].reclink&(1<<f.type)) || (enttype[f.type].reclink&(1<<e.type))) && f.links.find(n) < 0)
+                if(((enttype[e.type].reclink&(1<<f.type)) || (enttype[f.type].reclink&(1<<e.type))) && find( f.links, n ) < 0)
                 {
-                    f.links.add(n);
+                    f.links.emplace_back( n );
                     if(verbose) conoutf("\frWARNING: automatic reciprocal link between %d and %d added", n, ent);
                 }
                 else continue;
@@ -1005,7 +1006,7 @@ namespace entities
             case LIGHTFX:
             {
                 e.nextemit = 0;
-                loopv(e.links) if(ents.inrange(e.links[i]))
+                for( size_t i = 0; i < e.links.size(); ++i ) if(( 0 <= e.links[i] && e.links[i] < ents.size() ))
                 {
                     gameentity &f = *(gameentity *)ents[e.links[i]];
                     if(f.type != TRIGGER || !cantrigger(e.links[i])) continue;
@@ -1057,7 +1058,7 @@ namespace entities
                 while(e.attrs[2] >= TA_MAX) e.attrs[2] -= TA_MAX;
                 while(e.attrs[4] < 0) e.attrs[4] += 4;
                 while(e.attrs[4] >= 4) e.attrs[4] -= 4;
-                if(cantrigger(n)) loopv(e.links) if(ents.inrange(e.links[i]) && (ents[e.links[i]]->type == MAPMODEL || ents[e.links[i]]->type == PARTICLES || ents[e.links[i]]->type == MAPSOUND || ents[e.links[i]]->type == LIGHTFX))
+                if(cantrigger(n)) for( size_t i = 0; i < e.links.size(); ++i ) if(( 0 <= e.links[i] && e.links[i] < ents.size() ) && (ents[e.links[i]]->type == MAPMODEL || ents[e.links[i]]->type == PARTICLES || ents[e.links[i]]->type == MAPSOUND || ents[e.links[i]]->type == LIGHTFX))
                 {
                     ents[e.links[i]]->lastemit = e.lastemit;
                     ents[e.links[i]]->setspawned(TRIGSTATE(e.spawned(), e.attrs[4]));
@@ -1134,17 +1135,17 @@ namespace entities
     // these functions are called when the client touches the item
     void execlink(gameent *d, int index, bool local, int ignore)
     {
-        if(ents.inrange(index) && maylink(ents[index]->type))
+        if(( 0 <= index && index < ents.size() ) && maylink(ents[index]->type))
         {
             gameentity &e = *(gameentity *)ents[index];
             if(e.type == TRIGGER && !cantrigger(index)) return;
             bool commit = false;
             int numents = max(lastent(MAPMODEL), max(lastent(LIGHTFX), max(lastent(PARTICLES), lastent(MAPSOUND))));
-            loopi(numents) if(ents[i]->links.find(index) >= 0)
+            loopi(numents) if(find( ents[i]->links, index ) >= 0)
             {
                 gameentity &f = *(gameentity *)ents[i];
-                if(ents.inrange(ignore) && ents[ignore]->links.find(index) >= 0) continue;
-                bool both = e.links.find(i) >= 0;
+                if(( 0 <= ignore && ignore < ents.size() ) && find( ents[ignore]->links, index ) >= 0) continue;
+                bool both = find( e.links, i ) >= 0;
                 switch(f.type)
                 {
                     case MAPMODEL:
@@ -1166,7 +1167,7 @@ namespace entities
                         f.lastemit = e.lastemit;
                         if(e.type == TRIGGER) f.setspawned(TRIGSTATE(e.spawned(), e.attrs[4]));
                         else if(local) commit = true;
-                        if(mapsounds.inrange(f.attrs[0]) && !issound(f.schan))
+                        if(( 0 <= f.attrs[0] && f.attrs[0] < mapsounds.size() ) && !issound(f.schan))
                         {
                             int flags = SND_MAP;
                             loopk(SND_LAST) if(f.attrs[4]&(1<<k)) flags |= 1<<k;
@@ -1190,7 +1191,7 @@ namespace entities
 
     void spawnplayer(gameent *d, int ent, bool suicide)
     {
-        if(ent >= 0 && ents.inrange(ent))
+        if(ent >= 0 && ( 0 <= ent && ent < ents.size() ))
         {
             vec pos = ents[ent]->o;
             switch(ents[ent]->type)
@@ -1218,32 +1219,32 @@ namespace entities
         }
         else
         {
-            vector<int> spawns;
+            std::vector<int> spawns;
             loopk(4)
             {
-                spawns.shrink(0);
+                spawns.clear();
                 switch(k)
                 {
                     case 0:
                         if(m_play(game::gamemode) && m_team(game::gamemode, game::mutators))
                             loopi(lastent(PLAYERSTART)) if(ents[i]->type == PLAYERSTART && ents[i]->attrs[0] == d->team && m_check(ents[i]->attrs[3], ents[i]->attrs[4], game::gamemode, game::mutators))
-                                spawns.add(i);
+                                spawns.emplace_back( i );
                         break;
                     case 1: case 2:
-                        loopi(lastent(PLAYERSTART)) if(ents[i]->type == PLAYERSTART && (k == 2 || m_check(ents[i]->attrs[3], ents[i]->attrs[4], game::gamemode, game::mutators))) spawns.add(i);
+                        loopi(lastent(PLAYERSTART)) if(ents[i]->type == PLAYERSTART && (k == 2 || m_check(ents[i]->attrs[3], ents[i]->attrs[4], game::gamemode, game::mutators))) spawns.emplace_back( i );
                         break;
                     case 3:
-                        loopi(lastent(WEAPON)) if(ents[i]->type == WEAPON && m_check(ents[i]->attrs[2], ents[i]->attrs[3], game::gamemode, game::mutators)) spawns.add(i);
+                        loopi(lastent(WEAPON)) if(ents[i]->type == WEAPON && m_check(ents[i]->attrs[2], ents[i]->attrs[3], game::gamemode, game::mutators)) spawns.emplace_back( i );
                         break;
                     default: break;
                 }
                 while(!spawns.empty())
                 {
-                    int r = rnd(spawns.length());
+                    int r = rnd(spawns.size());
                     gameentity &e = *(gameentity *)ents[spawns[r]];
                     if(tryspawn(d, e.o, e.type == PLAYERSTART ? e.attrs[1] : rnd(360), e.type == PLAYERSTART ? e.attrs[2] : 0))
                         return;
-                    spawns.remove(r); // must've really sucked, try another one
+                    spawns.erase( spawns.begin() + r ); // must've really sucked, try another one
                 }
             }
             d->yaw = d->pitch = d->roll = 0;
@@ -1259,7 +1260,7 @@ namespace entities
         extentity &e = *ents[i];
         fixentity(i, true);
         if(m_edit(game::gamemode) && game::player1->state == CS_EDITING)
-            client::addmsg(N_EDITENT, "ri5iv", i, (int)(e.o.x*DMF), (int)(e.o.y*DMF), (int)(e.o.z*DMF), e.type, e.attrs.length(), e.attrs.length(), e.attrs.getbuf()); // FIXME
+            client::addmsg(N_EDITENT, "ri5iv", i, (int)(e.o.x*DMF), (int)(e.o.y*DMF), (int)(e.o.z*DMF), e.type, e.attrs.size(), e.attrs.size(), e.attrs.data()); // FIXME
         if(e.type < MAXENTTYPES)
         {
             lastenttype[e.type] = max(lastenttype[e.type], i+1);
@@ -1282,7 +1283,7 @@ namespace entities
 
     bool canlink(int index, int node, bool msg)
     {
-        if(ents.inrange(index) && ents.inrange(node))
+        if(( 0 <= index && index < ents.size() ) && ( 0 <= node && node < ents.size() ))
         {
             if(index != node && maylink(ents[index]->type) && maylink(ents[node]->type) &&
                     (enttype[ents[index]->type].canlink&(1<<ents[node]->type)))
@@ -1298,18 +1299,18 @@ namespace entities
 
     bool linkents(int index, int node, bool add, bool local, bool toggle)
     {
-        if(ents.inrange(index) && ents.inrange(node) && index != node && canlink(index, node, local && verbose))
+        if(( 0 <= index && index < ents.size() ) && ( 0 <= node && node < ents.size() ) && index != node && canlink(index, node, local && verbose))
         {
             gameentity &e = *(gameentity *)ents[index], &f = *(gameentity *)ents[node];
             bool recip = (enttype[e.type].reclink&(1<<f.type)) || (enttype[f.type].reclink&(1<<e.type));
             int g = -1, h = -1;
-            if((toggle || !add) && (g = e.links.find(node)) >= 0)
+            if((toggle || !add) && (g = find( e.links, node )) >= 0)
             {
-                h = f.links.find(index);
+                h = find( f.links, index );
                 if(!add || !canlink(node, index) || (toggle && h >= 0))
                 {
-                    e.links.remove(g);
-                    if(recip && h >= 0) f.links.remove(h);
+                    e.links.erase( e.links.begin() + g );
+                    if(recip && h >= 0) f.links.erase( f.links.begin() + h );
                     fixentity(index, true);
                     if(local && m_edit(game::gamemode)) client::addmsg(N_EDITLINK, "ri3", 0, index, node);
                     if(verbose > 2) conoutf("\faentity %s (%d) and %s (%d) delinked", enttype[ents[index]->type].name, index, enttype[ents[node]->type].name, node);
@@ -1317,18 +1318,18 @@ namespace entities
                 }
                 else if(toggle && canlink(node, index))
                 {
-                    f.links.add(index);
-                    if(recip && (h = e.links.find(node)) < 0) e.links.add(node);
+                    f.links.emplace_back( index );
+                    if(recip && (h = find( e.links, node )) < 0) e.links.emplace_back( node );
                     fixentity(node, true);
                     if(local && m_edit(game::gamemode)) client::addmsg(N_EDITLINK, "ri3", 1, node, index);
                     if(verbose > 2) conoutf("\faentity %s (%d) and %s (%d) linked", enttype[ents[node]->type].name, node, enttype[ents[index]->type].name, index);
                     return true;
                 }
             }
-            else if(toggle && canlink(node, index) && (g = f.links.find(index)) >= 0)
+            else if(toggle && canlink(node, index) && (g = find( f.links, index )) >= 0)
             {
-                f.links.remove(g);
-                if(recip && (h = e.links.find(node)) >= 0) e.links.remove(h);
+                f.links.erase( f.links.begin() + g );
+                if(recip && (h = find( e.links, node )) >= 0) e.links.erase( e.links.begin() + h );
                 fixentity(node, true);
                 if(local && m_edit(game::gamemode)) client::addmsg(N_EDITLINK, "ri3", 0, node, index);
                 if(verbose > 2) conoutf("\faentity %s (%d) and %s (%d) delinked", enttype[ents[node]->type].name, node, enttype[ents[index]->type].name, index);
@@ -1336,8 +1337,8 @@ namespace entities
             }
             else if(toggle || add)
             {
-                e.links.add(node);
-                if(recip && (h = f.links.find(index)) < 0) f.links.add(index);
+                e.links.emplace_back( node );
+                if(recip && (h = find( f.links, index )) < 0) f.links.emplace_back( index );
                 fixentity(index, true);
                 if(local && m_edit(game::gamemode)) client::addmsg(N_EDITLINK, "ri3", 1, index, node);
                 if(verbose > 2) conoutf("\faentity %s (%d) and %s (%d) linked", enttype[ents[index]->type].name, index, enttype[ents[node]->type].name, node);
@@ -1351,11 +1352,11 @@ namespace entities
 
     void entitylink(int index, int node, bool both = true)
     {
-        if(ents.inrange(index) && ents.inrange(node))
+        if(( 0 <= index && index < ents.size() ) && ( 0 <= node && node < ents.size() ))
         {
             gameentity &e = *(gameentity *)ents[index], &f = *(gameentity *)ents[node];
-            if(e.links.find(node) < 0) linkents(index, node, true, true, false);
-            if(both && f.links.find(index) < 0) linkents(node, index, true, true, false);
+            if(find( e.links, node ) < 0) linkents(index, node, true, true, false);
+            if(both && find( f.links, index ) < 0) linkents(node, index, true, true, false);
         }
     }
 
@@ -1363,7 +1364,7 @@ namespace entities
     {
         int ent, tag;
     };
-    vector<octatele> octateles;
+    std::vector<octatele> octateles;
 
     void readent(stream *g, int mtype, int mver, char *gid, int gver, int id)
     {
@@ -1415,7 +1416,7 @@ namespace entities
                 // TELEDEST         -   TELEPORT (linked)
                 case 20: case 21:
                 {
-                    octatele &t = octateles.add();
+                    octatele &t = (octateles.emplace_back(  ), octateles.back());
                     t.ent = id;
                     if(f.type == 21)
                     {
@@ -1499,7 +1500,7 @@ namespace entities
     {
         int numents[MAXENTTYPES], numinvalid = 0;
         memset(numents, 0, sizeof(numents));
-        loopv(ents)
+        for( size_t i = 0; i < ents.size(); ++i )
         {
             gameentity &e = *(gameentity *)ents[i];
             if(e.type < MAXENTTYPES) numents[e.type]++;
@@ -1520,10 +1521,10 @@ namespace entities
                 else nextpriority = max(nextpriority, enttype[i].priority);
             }
         } while(nextpriority < priority);
-        idxs.setsize(0);
-        idxs.reserve(offset + numinvalid);
-        while(idxs.length() < offset + numinvalid) idxs.add(-1);
-        loopv(ents)
+        idxs.clear();
+        idxs.resize( idxs.size() + offset + numinvalid );
+        while(idxs.size() < offset + numinvalid) idxs.emplace_back( -1 );
+        for( size_t i = 0; i < ents.size(); ++i )
         {
             gameentity &e = *(gameentity *)ents[i];
             idxs[e.type < MAXENTTYPES ? offsets[e.type]++ : offset++] = i;
@@ -1534,23 +1535,23 @@ namespace entities
     {
         int flag = 0, teams[T_TOTAL] = {0};
         progress(0, "importing entities...");
-        loopv(octateles) // translate teledest to teleport and link them appropriately
+        for( size_t i = 0; i < octateles.size(); ++i ) // translate teledest to teleport and link them appropriately
         {
             octatele &t = octateles[i];
             if(t.tag <= 0) continue;
             gameentity &e = *(gameentity *)ents[t.ent];
             if(e.type != TELEPORT) continue;
-            loopvj(octateles)
+            for( size_t j = 0; j < octateles.size(); ++j )
             {
                 octatele &p = octateles[j];
                 if(p.tag != -t.tag) continue;
                 gameentity &f = *(gameentity *)ents[p.ent];
                 if(f.type != TELEPORT) continue;
                 if(verbose) conoutf("\frWARNING: teledest %d and teleport %d linked automatically", t.ent, p.ent);
-                f.links.add(t.ent);
+                f.links.emplace_back( t.ent );
             }
         }
-        loopv(octateles) // second pass teledest translation
+        for( size_t i = 0; i < octateles.size(); ++i ) // second pass teledest translation
         {
             octatele &t = octateles[i];
             if(t.tag <= 0) continue;
@@ -1558,7 +1559,7 @@ namespace entities
             if(e.type != TELEPORT) continue;
             int dest = -1;
             float bestdist = enttype[TELEPORT].radius*4.f;
-            loopvj(octateles)
+            for( size_t j = 0; j < octateles.size(); ++j )
             {
                 octatele &p = octateles[j];
                 if(p.tag >= 0) continue;
@@ -1569,36 +1570,36 @@ namespace entities
                 dest = p.ent;
                 bestdist = dist;
             }
-            if(ents.inrange(dest))
+            if(( 0 <= dest && dest < ents.size() ))
             {
                 gameentity &f = *(gameentity *)ents[dest];
                 if(verbose) conoutf("\frWARNING: replaced teledest %d with closest teleport %d", t.ent, dest);
                 f.attrs[0] = e.attrs[0]; // copy the yaw
-                loopvk(e.links) if(f.links.find(e.links[k]) < 0) f.links.add(e.links[k]);
-                loopvj(ents) if(j != t.ent && j != dest)
+                for( size_t k = 0; k < e.links.size(); ++k ) if(find( f.links, e.links[k] ) < 0) f.links.emplace_back( e.links[k] );
+                for( size_t j = 0; j < ents.size(); ++j ) if(j != t.ent && j != dest)
                 {
                     gameentity &g = *(gameentity *)ents[j];
                     if(g.type == TELEPORT)
                     {
-                        int link = g.links.find(t.ent);
+                        int link = find( g.links, t.ent );
                         if(link >= 0)
                         {
-                            g.links.remove(link);
-                            if(g.links.find(dest) < 0) g.links.add(dest);
-                            if(verbose) conoutf("\frWARNING: imported link to teledest %d to teleport %d", t.ent, j);
+                            g.links.erase( g.links.begin() + link );
+                            if(find( g.links, dest ) < 0) g.links.emplace_back( dest );
+                            if(verbose) conoutf("\frWARNING: imported link to teledest %d to teleport %zu", t.ent, j);
                         }
                     }
                 }
                 e.type = NOTUSED; // get rid of ye olde teledest
-                e.links.shrink(0);
+                e.links.clear();
             }
             else if(verbose) conoutf("\frWARNING: teledest %d has become a teleport", t.ent);
         }
-        octateles.setsize(0);
-        loopv(ents)
+        octateles.clear();
+        for( size_t i = 0; i < ents.size(); ++i )
         {
             gameentity &e = *(gameentity *)ents[i];
-            progress(i/float(ents.length()), "importing entities...");
+            progress(i/float(ents.size()), "importing entities...");
             switch(e.type)
             {
                 case WEAPON:
@@ -1606,14 +1607,14 @@ namespace entities
                     float mindist = float((enttype[WEAPON].radius*4)*(enttype[WEAPON].radius*4));
                     int weaps[W_MAX];
                     loopj(W_MAX) weaps[j] = j != e.attrs[0] ? 0 : 1;
-                    loopvj(ents) if(j != i)
+                    for( size_t j = 0; j < ents.size(); ++j ) if(j != i)
                     {
                         gameentity &f = *(gameentity *)ents[j];
                         if(f.type == WEAPON && e.o.squaredist(f.o) <= mindist && isweap(f.attrs[0]))
                         {
                             weaps[f.attrs[0]]++;
                             f.type = NOTUSED;
-                            if(verbose) conoutf("\frWARNING: culled tightly packed weapon %d [%d]", j, f.attrs[0]);
+                            if(verbose) conoutf("\frWARNING: culled tightly packed weapon %zu [%d]", j, f.attrs[0]);
                         }
                     }
                     int best = e.attrs[0];
@@ -1628,20 +1629,20 @@ namespace entities
                     {
                         int dest = -1;
 
-                        loopvj(ents) if(j != i)
+                        for( size_t j = 0; j < ents.size(); ++j ) if(j != i)
                         {
                             gameentity &f = *(gameentity *)ents[j];
 
                             if(f.type == AFFINITY && f.attrs[1] != T_NEUTRAL &&
-                                (!ents.inrange(dest) || e.o.dist(f.o) < ents[dest]->o.dist(f.o)) &&
+                                (!( 0 <= dest && dest < ents.size() ) || e.o.dist(f.o) < ents[dest]->o.dist(f.o)) &&
                                     e.o.dist(f.o) <= enttype[AFFINITY].radius*4.f)
                                         dest = j;
                         }
 
-                        if(ents.inrange(dest))
+                        if(( 0 <= dest && dest < ents.size() ))
                         {
                             gameentity &f = *(gameentity *)ents[dest];
-                            if(verbose) conoutf("\frWARNING: old base %d (%d, %d) replaced with flag %d (%d, %d)", i, e.attrs[0], e.attrs[1], dest, f.attrs[0], f.attrs[1]);
+                            if(verbose) conoutf("\frWARNING: old base %zu (%d, %d) replaced with flag %d (%d, %d)", i, e.attrs[0], e.attrs[1], dest, f.attrs[0], f.attrs[1]);
                             if(!f.attrs[0]) f.attrs[0] = e.attrs[0]; // give it the old base idx
                             e.type = NOTUSED;
                         }
@@ -1652,7 +1653,7 @@ namespace entities
             }
         }
 
-        loopv(ents)
+        for( size_t i = 0; i < ents.size(); ++i )
         {
             gameentity &e = *(gameentity *)ents[i];
             switch(e.type)
@@ -1700,10 +1701,10 @@ namespace entities
 
     void updateoldentities(int mtype, int mver, int gver)
     {
-        loopvj(ents)
+        for( size_t j = 0; j < ents.size(); ++j )
         {
             gameentity &e = *(gameentity *)ents[j];
-            progress(j/float(ents.length()), "updating old entities...");
+            progress(j/float(ents.size()), "updating old entities...");
             switch(e.type)
             {
                 case LIGHTFX:
@@ -1929,21 +1930,21 @@ namespace entities
     {
         lastroutenode = routeid = -1;
         numactors = lastroutetime = droproute = 0;
-        airnodes.setsize(0);
-        ai::oldwaypoints.setsize(0);
-        loopv(ents)
+        airnodes.clear();
+        ai::oldwaypoints.clear();
+        for( size_t i = 0; i < ents.size(); ++i )
         {
             gameentity &e = *(gameentity *)ents[i];
-            progress(i/float(ents.length()), "setting entity attributes...");
+            progress(i/float(ents.size()), "setting entity attributes...");
             int num = max(5, enttype[e.type].numattrs);
-            if(e.attrs.length() < num) e.attrs.add(0, num - e.attrs.length());
-            else if(e.attrs.length() > num) e.attrs.setsize(num);
+            if(e.attrs.size() < num) e.attrs.add(0, num - e.attrs.size());
+            else if(e.attrs.size() > num) e.attrs.resize( num );
         }
         if(mtype == MAP_OCTA || (mtype == MAP_MAPZ && gver <= 49)) importentities(mtype, mver, gver);
         if(mtype == MAP_OCTA || (mtype == MAP_MAPZ && gver < VERSION_GAME)) updateoldentities(mtype, mver, gver);
-        loopv(ents)
+        for( size_t i = 0; i < ents.size(); ++i )
         {
-            progress(i/float(ents.length()), "fixing entities...");
+            progress(i/float(ents.size()), "fixing entities...");
             fixentity(i, false);
             switch(ents[i]->type)
             {
@@ -1955,10 +1956,10 @@ namespace entities
         memset(lastusetype, 0, sizeof(lastusetype));
         if(m_onslaught(game::gamemode, game::mutators) && !numactors)
         {
-            loopv(ents) if(ents[i]->type == PLAYERSTART || ents[i]->type == WEAPON)
+            for( size_t i = 0; i < ents.size(); ++i ) if(ents[i]->type == PLAYERSTART || ents[i]->type == WEAPON)
             {
                 extentity &e = *newent();
-                ents.add(&e);
+                ents.emplace_back( &e );
                 e.type = ACTOR;
                 e.o = ents[i]->o;
                 e.attrs.add(0, max(5, enttype[ACTOR].numattrs));
@@ -1977,40 +1978,40 @@ namespace entities
                 numactors++;
             }
         }
-        loopv(ents)
+        for( size_t i = 0; i < ents.size(); ++i )
         {
             gameentity &e = *(gameentity *)ents[i];
-            progress(i/float(ents.length()), "updating entities...");
+            progress(i/float(ents.size()), "updating entities...");
             if(mtype == MAP_MAPZ && gver <= 212)
             {
                 if(e.type == ROUTE) e.type = NOTUSED;
                 else if(e.type == UNUSEDENT)
                 {
-                    ai::oldwaypoint &o = ai::oldwaypoints.add();
+                    ai::oldwaypoint &o = (ai::oldwaypoints.emplace_back(  ),ai::oldwaypoints.back());
                     o.o = e.o;
                     o.ent = i;
-                    loopvj(e.links) o.links.add(e.links[j]);
+                    for( size_t j = 0; j < e.links.size(); ++j ) o.links.emplace_back( e.links[j] );
                     e.type = NOTUSED;
                 }
             }
             if(mtype == MAP_MAPZ && gver <= 221 && (e.type == ROUTE || e.type == UNUSEDENT)) e.type = NOTUSED;
             if(e.type < MAXENTTYPES)
             {
-                lastenttype[e.type] = max(lastenttype[e.type], i+1);
-                lastusetype[enttype[e.type].usetype] = max(lastusetype[enttype[e.type].usetype], i+1);
+                lastenttype[e.type] = max(lastenttype[e.type], int(i)+1);
+                lastusetype[enttype[e.type].usetype] = max(lastusetype[enttype[e.type].usetype], int(i)+1);
             }
             if(enttype[e.type].usetype == EU_ITEM || e.type == TRIGGER)
             {
                 setspawn(i, 0);
                 if(enttype[e.type].synckin) // find shared kin
                 {
-                    loopvj(e.links) if(ents.inrange(e.links[j]))
+                    for( size_t j = 0; j < e.links.size(); ++j ) if(( 0 <= e.links[j] && e.links[j] < ents.size() ))
                     {
-                        loopvk(ents) if(ents[k]->type == e.type && ents[k]->links.find(e.links[j]) >= 0)
+                        for( size_t k = 0; k < ents.size(); ++k ) if(ents[k]->type == e.type && find( ents[k]->links, e.links[j] ) >= 0)
                         {
                             gameentity &f = *(gameentity *)ents[k];
-                            if(e.kin.find(k) < 0) e.kin.add(k);
-                            if(f.kin.find(i) < 0) f.kin.add(i);
+                            if(find( e.kin, k ) < 0) e.kin.emplace_back( k );
+                            if(find( f.kin, i ) < 0) f.kin.emplace_back( i );
                         }
                     }
                 }
@@ -2021,14 +2022,14 @@ namespace entities
     #define renderfocus(i,f) { gameentity &e = *(gameentity *)ents[i]; f; }
     void renderlinked(gameentity &e, int idx)
     {
-        loopv(e.links)
+        for( size_t i = 0; i < e.links.size(); ++i )
         {
             int index = e.links[i];
-            if(ents.inrange(index))
+            if(( 0 <= index && index < ents.size() ))
             {
                 gameentity &f = *(gameentity *)ents[index];
                 bool both = false;
-                loopvj(f.links) if(f.links[j] == idx)
+                for( size_t j = 0; j < f.links.size(); ++j ) if(f.links[j] == idx)
                 {
                     both = true;
                     break;
@@ -2083,7 +2084,7 @@ namespace entities
                 }
                 case LIGHTFX:
                 {
-                    if(e.attrs[0] == LFX_SPOTLIGHT) loopv(e.links) if(ents.inrange(e.links[i]) && ents[e.links[i]]->type == LIGHT)
+                    if(e.attrs[0] == LFX_SPOTLIGHT) for( size_t i = 0; i < e.links.size(); ++i ) if(( 0 <= e.links[i] && e.links[i] < ents.size() ) && ents[e.links[i]]->type == LIGHT)
                     {
                         gameentity &f = *(gameentity *)ents[e.links[i]];
                         float radius = f.attrs[0];
@@ -2179,14 +2180,14 @@ namespace entities
     {
         if(game::player1->state == CS_EDITING && showlighting)
         {
-            #define islightable(q) ((q)->type == LIGHT && (q)->attrs[0] > 0 && !(q)->links.length())
-            loopv(entgroup)
+            #define islightable(q) ((q)->type == LIGHT && (q)->attrs[0] > 0 && !(q)->links.size())
+            for( size_t i = 0; i < entgroup.size(); ++i )
             {
                 int n = entgroup[i];
-                if(ents.inrange(n) && islightable(ents[n]) && n != enthover)
+                if(( 0 <= n && n < ents.size() ) && islightable(ents[n]) && n != enthover)
                     renderfocus(n, renderentlight(e));
             }
-            if(ents.inrange(enthover) && islightable(ents[enthover]))
+            if(( 0 <= enthover && enthover < ents.size() ) && islightable(ents[enthover]))
                 renderfocus(enthover, renderentlight(e));
         }
         loopi(lastent(LIGHTFX)) if(ents[i]->type == LIGHTFX && ents[i]->attrs[0] != LFX_SPOTLIGHT)
@@ -2199,10 +2200,10 @@ namespace entities
             else
             {
                 bool lonely = true;
-                loopvk(ents[i]->links) if(ents.inrange(ents[i]->links[k]) && ents[ents[i]->links[k]]->type != LIGHT) { lonely = false; break; }
+                for( size_t k = 0; k < ents[i]->links.size(); ++k ) if(( 0 <= ents[i]->links[k] && ents[i]->links[k] < ents.size() ) && ents[ents[i]->links[k]]->type != LIGHT) { lonely = false; break; }
                 if(!lonely) continue;
             }
-            loopvk(ents[i]->links) if(ents.inrange(ents[i]->links[k]) && ents[ents[i]->links[k]]->type == LIGHT)
+            for( size_t k = 0; k < ents[i]->links.size(); ++k ) if(( 0 <= ents[i]->links[k] && ents[i]->links[k] < ents.size() ) && ents[ents[i]->links[k]]->type == LIGHT)
                 makelightfx(*ents[i], *ents[ents[i]->links[k]]);
         }
     }
@@ -2212,7 +2213,7 @@ namespace entities
         loopi(lastent(MAPSOUND))
         {
             gameentity &e = *(gameentity *)ents[i];
-            if(e.type == MAPSOUND && e.links.empty() && mapsounds.inrange(e.attrs[0]) && !issound(e.schan))
+            if(e.type == MAPSOUND && e.links.empty() && ( 0 <= e.attrs[0] && e.attrs[0] < mapsounds.size() ) && !issound(e.schan))
             {
                 int flags = SND_MAP|SND_LOOP; // ambient sounds loop
                 loopk(SND_LAST)  if(e.attrs[4]&(1<<k)) flags |= 1<<k;
@@ -2227,33 +2228,33 @@ namespace entities
                 {
                     const vec o = game::player1->feetpos();
                     int curnode = lastroutenode;
-                    if(!ents.inrange(curnode) || ents[curnode]->o.dist(o) >= droproutedist)
+                    if(!( 0 <= curnode && curnode < ents.size() ) || ents[curnode]->o.dist(o) >= droproutedist)
                     {
                         curnode = -1;
                         loopi(lastent(ROUTE)) if(ents[i]->type == ROUTE && ents[i]->attrs[0] == routeid)
                         {
                             float dist = ents[i]->o.dist(o);
-                            if(dist < droproutedist && (!ents.inrange(curnode) || dist < ents[curnode]->o.dist(o)))
+                            if(dist < droproutedist && (!( 0 <= curnode && curnode < ents.size() ) || dist < ents[curnode]->o.dist(o)))
                                 curnode = i;
                         }
                     }
-                    if(!ents.inrange(curnode))
+                    if(!( 0 <= curnode && curnode < ents.size() ))
                     {
                         attrvector attrs;
-                        attrs.add(routeid);
+                        attrs.emplace_back( routeid );
                         attrs.add(int(game::player1->yaw));
                         attrs.add(int(game::player1->pitch));
-                        attrs.add(game::player1->move);
-                        attrs.add(game::player1->strafe);
-                        attrs.add(0);
+                        attrs.emplace_back( game::player1->move );
+                        attrs.emplace_back( game::player1->strafe );
+                        attrs.emplace_back( 0 );
                         loopi(AC_MAX) if(game::player1->action[i] || (abs(game::player1->actiontime[i]) > lastroutetime))
                             attrs[5] |= (1<<i);
                         int n = newentity(o, int(ROUTE), attrs);
-                        if(ents.inrange(lastroutenode)) ents[lastroutenode]->links.add(n);
+                        if(( 0 <= lastroutenode && lastroutenode < ents.size() )) ents[lastroutenode]->links.emplace_back( n );
                         curnode = lastenttype[ROUTE] = n;
-                        if(game::player1->airmillis) airnodes.add(n);
+                        if(game::player1->airmillis) airnodes.emplace_back( n );
                     }
-                    if(!game::player1->airmillis && !airnodes.empty()) airnodes.setsize(0);
+                    if(!game::player1->airmillis && !airnodes.empty()) airnodes.clear();
                     if(lastroutenode != curnode) lastroutetime = lastmillis;
                     lastroutenode = curnode;
                 }
@@ -2262,19 +2263,19 @@ namespace entities
             {
                 lastroutenode = -1;
                 lastroutetime = 0;
-                if(game::player1->state == CS_DEAD) loopv(airnodes) if(ents.inrange(airnodes[i])) ents[airnodes[i]]->type = ET_EMPTY;
-                airnodes.setsize(0);
+                if(game::player1->state == CS_DEAD) for( size_t i = 0; i < airnodes.size(); ++i ) if(( 0 <= airnodes[i] && airnodes[i] < ents.size() )) ents[airnodes[i]]->type = ET_EMPTY;
+                airnodes.clear();
             }
         }
     }
 
     void render()
     {
-        if(rendermainview && shouldshowents(game::player1->state == CS_EDITING ? 1 : (!entgroup.empty() || ents.inrange(enthover) ? 2 : 3))) loopv(ents) // important, don't render lines and stuff otherwise!
-            renderfocus(i, renderentshow(e, i, game::player1->state == CS_EDITING ? ((entgroup.find(i) >= 0 || enthover == i) ? 1 : 2) : 3));
+        if(rendermainview && shouldshowents(game::player1->state == CS_EDITING ? 1 : (!entgroup.empty() || ( 0 <= enthover && enthover < ents.size() ) ? 2 : 3))) for( size_t i = 0; i < ents.size(); ++i ) // important, don't render lines and stuff otherwise!
+            renderfocus(i, renderentshow(e, i, game::player1->state == CS_EDITING ? ((find( entgroup, i ) >= 0 || enthover == i) ? 1 : 2) : 3));
         if(!drawtex)
         {
-            int numents = m_edit(game::gamemode) ? ents.length() : lastuse(EU_ITEM);
+            int numents = m_edit(game::gamemode) ? ents.size() : lastuse(EU_ITEM);
             loopi(numents)
             {
                 gameentity &e = *(gameentity *)ents[i];
@@ -2370,7 +2371,7 @@ namespace entities
             case ROUTE:
             {
                 if(e.attrs[0] != routeid || (!m_edit(game::gamemode) && !m_race(game::gamemode))) break;
-                loopv(e.links) if(ents.inrange(e.links[i]) && ents[e.links[i]]->type == ROUTE && (!routemaxdist || e.o.dist(ents[e.links[i]]->o) <= routemaxdist))
+                for( size_t i = 0; i < e.links.size(); ++i ) if(( 0 <= e.links[i] && e.links[i] < ents.size() ) && ents[e.links[i]]->type == ROUTE && (!routemaxdist || e.o.dist(ents[e.links[i]]->o) <= routemaxdist))
                     part_flare(e.o, ents[e.links[i]]->o, 1, PART_LIGHTNING_FLARE, routecolour);
             }
             default: break;
@@ -2379,7 +2380,7 @@ namespace entities
         vec off(0, 0, 2.f), pos(o);
         if(enttype[e.type].usetype == EU_ITEM) pos.add(off);
         bool edit = m_edit(game::gamemode) && cansee(idx), isedit = edit && game::player1->state == CS_EDITING,
-             hasent = isedit && idx >= 0 && (enthover == idx || entgroup.find(idx) >= 0),
+             hasent = isedit && idx >= 0 && (enthover == idx || find( entgroup, idx ) >= 0),
              hastop = hasent && e.o.squaredist(camera1->o) <= showentdist*showentdist;
         int sweap = m_weapon(game::focus->actortype, game::gamemode, game::mutators),
             attr = w_attr(game::gamemode, game::mutators, e.type, e.attrs[0], sweap),
@@ -2466,7 +2467,7 @@ namespace entities
     void drawparticles()
     {
         float maxdist = float(maxparticledistance)*float(maxparticledistance);
-        int numents = m_edit(game::gamemode) ? ents.length() : max(lastuse(EU_ITEM), max(lastent(PARTICLES), lastent(TELEPORT)));
+        int numents = m_edit(game::gamemode) ? ents.size() : max(lastuse(EU_ITEM), max(lastent(PARTICLES), lastent(TELEPORT)));
         bool hasroute = (m_edit(game::gamemode) || m_race(game::gamemode)) && routeid >= 0;
         if(hasroute) numents = max(numents, lastent(ROUTE));
         loopi(numents)
@@ -2494,10 +2495,10 @@ namespace entities
             }
             drawparticle(e, e.o, i, e.spawned(), active, skew);
         }
-        loopv(projs::projs)
+        for( size_t i = 0; i < projs::projs.size(); ++i )
         {
             projent &proj = *projs::projs[i];
-            if(proj.projtype != PRJ_ENT || !ents.inrange(proj.id) || !proj.ready()) continue;
+            if(proj.projtype != PRJ_ENT || !( 0 <= proj.id && proj.id < ents.size() ) || !proj.ready()) continue;
             gameentity &e = *(gameentity *)ents[proj.id];
             if(e.type == NOTUSED || e.attrs.empty()) continue;
             float skew = 1;
