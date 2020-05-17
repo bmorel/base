@@ -1,3 +1,8 @@
+#ifndef AUTH_H
+#define AUTH_H
+
+#include <vector>
+
 // WARNING: Before modifying this file, please read our Guidelines
 // This file can be found in the distribution under: ./docs/guidelines.txt
 // Or at: http://redeclipse.net/wiki/Multiplayer_Guidelines
@@ -490,3 +495,4 @@ void masterdisconnected()
 {
     auth::masterdisconnected();
 }
+#endif

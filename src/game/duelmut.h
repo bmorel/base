@@ -1,3 +1,8 @@
+#ifndef DUELMUT_H
+#define DUELMUT_H
+
+#include <vector>
+
 #ifdef GAMESERVER
 struct duelservmode : servmode
 {
@@ -484,4 +489,5 @@ struct duelservmode : servmode
         doreset(true);
     }
 } duelmutator;
+#endif
 #endif

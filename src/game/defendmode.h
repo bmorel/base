@@ -1,3 +1,8 @@
+#ifndef DEFENDMODE_H
+#define DEFENDMODE_H
+
+#include <vector>
+
 struct defendservmode : defendstate, servmode
 {
     int scoresec;
@@ -260,3 +265,4 @@ struct defendservmode : defendstate, servmode
         loopv(modified) sendaffinity(modified[i], true);
     }
 } defendmode;
+#endif
