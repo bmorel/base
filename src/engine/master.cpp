@@ -1,3 +1,4 @@
+#include <vector>
 #include <algorithm>
 using std::swap;
 
@@ -66,10 +67,10 @@ struct masterclient
     string name, desc, flags, authhandle, branch;
 
     char input[4096];
-    vector<char> output;
+    std::vector<char> output;
     int inputpos, outputpos, port, numpings, lastcontrol, version;
     enet_uint32 lastping, lastpong, lastactivity;
-    vector<authreq> authreqs;
+    std::vector<authreq> authreqs;
     authreq serverauthreq;
     bool isserver, isquick, ishttp, listserver, shouldping, shouldpurge;
 
@@ -84,8 +85,8 @@ struct masterclient
         lastping = lastpong = lastactivity = 0;
         isserver = isquick = ishttp = listserver = shouldping = shouldpurge = false;
         port = MASTER_PORT;
-        output.shrink(0);
-        authreqs.shrink(0);
+        output.clear();
+        authreqs.clear();
     }
 
     bool hasflag(char f)
@@ -114,14 +115,14 @@ struct masterclient
     }
 };
 
-static vector<masterclient *> masterclients;
+static std::vector<masterclient *> masterclients;
 static ENetSocket mastersocket = ENET_SOCKET_NULL, pingsocket = ENET_SOCKET_NULL;
 static time_t starttime;
 
 void masterout(masterclient &c, const char *msg, int len = 0)
 {
     if(!len) len = strlen(msg);
-    c.output.put(msg, len);
+    c.output.insert( c.output.end(), msg, msg + len );
 }
 
 void masteroutf(masterclient &c, const char *fmt, ...)
@@ -214,7 +215,7 @@ COMMAND(0, clearauth, "");
 void purgeauths(masterclient &c)
 {
     int expired = 0;
-    loopv(c.authreqs)
+    for( size_t i = 0; i < c.authreqs.size(); ++i )
     {
         if(ENET_TIME_DIFFERENCE(totalmillis, c.authreqs[i].reqtime) >= AUTH_TIME)
         {
@@ -224,7 +225,7 @@ void purgeauths(masterclient &c)
         }
         else break;
     }
-    if(expired > 0) c.authreqs.remove(0, expired);
+    if(expired > 0) c.authreqs.erase( c.authreqs.begin() + 0, c.authreqs.begin() + expired );
 }
 
 void reqauth(masterclient &c, uint id, char *name, char *hostname)
@@ -242,17 +243,17 @@ void reqauth(masterclient &c, uint id, char *name, char *hostname)
     }
     conoutf("attempting '%s' (%u) from %s on server %s\n", name, id, host, ip);
 
-    authreq &a = c.authreqs.add();
+    authreq &a = (c.authreqs.emplace_back(  ), c.authreqs.back());
     a.user = u;
     a.reqtime = totalmillis;
     a.id = id;
     copystring(a.hostname, host);
     uint seed[3] = { uint(starttime), uint(totalmillis), randomMT() };
     static vector<char> buf;
-    buf.setsize(0);
+    buf.clear();
     a.answer = genchallenge(u->pubkey, seed, sizeof(seed), buf);
 
-    masteroutf(c, "chalauth %u %s\n", id, buf.getbuf());
+    masteroutf(c, "chalauth %u %s\n", id, buf.data());
 }
 
 void reqserverauth(masterclient &c, char *name)
@@ -275,10 +276,10 @@ void reqserverauth(masterclient &c, char *name)
     c.serverauthreq.reqtime = totalmillis;
     uint seed[3] = { uint(starttime), uint(totalmillis), randomMT() };
     static vector<char> buf;
-    buf.setsize(0);
+    buf.clear();
     c.serverauthreq.answer = genchallenge(u->pubkey, seed, sizeof(seed), buf);
 
-    masteroutf(c, "chalserverauth %s\n", buf.getbuf());
+    masteroutf(c, "chalserverauth %s\n", buf.data());
 }
 
 void confauth(masterclient &c, uint id, const char *val)
@@ -286,7 +287,7 @@ void confauth(masterclient &c, uint id, const char *val)
     purgeauths(c);
     string ip;
     if(enet_address_get_host_ip(&c.address, ip, sizeof(ip)) < 0) copystring(ip, "-");
-    loopv(c.authreqs) if(c.authreqs[i].id == id)
+    for( size_t i = 0; i < c.authreqs.size(); ++i ) if(c.authreqs[i].id == id)
     {
         if(checkchallenge(val, c.authreqs[i].answer))
         {
@@ -299,7 +300,7 @@ void confauth(masterclient &c, uint id, const char *val)
             conoutf("failed '%s' (%u) from %s on server %s (BADKEY)\n", c.authreqs[i].user->name, id, c.authreqs[i].hostname, ip);
         }
         freechallenge(c.authreqs[i].answer);
-        c.authreqs.remove(i--);
+        c.authreqs.erase( c.authreqs.begin() + i-- );
         return;
     }
     masteroutf(c, "failauth %u\n", id);
@@ -311,7 +312,7 @@ void purgemasterclient(int n)
     enet_socket_destroy(c.socket);
     if(verbose || c.isserver) conoutf("master peer %s disconnected", c.name);
     delete masterclients[n];
-    masterclients.remove(n);
+    masterclients.erase( masterclients.begin() + n );
 }
 
 void confserverauth(masterclient &c, const char *val)
@@ -344,7 +345,7 @@ void checkmasterpongs()
         buf.dataLength = sizeof(pong);
         int len = enet_socket_receive(pingsocket, &addr, &buf, 1);
         if(len <= 0) break;
-        loopv(masterclients)
+        for( size_t i = 0; i < masterclients.size(); ++i )
         {
             masterclient &c = *masterclients[i];
             if(c.address.host == addr.host && c.port+1 == addr.port)
@@ -368,8 +369,8 @@ int nextcontrolversion()
     if(controlversion < 0)
     {
         controlversion = 0;
-        loopv(masterclients) masterclients[i]->lastcontrol = -1;
-        loopv(control) if(control[i].type < ipinfo::SYNCTYPES && control[i].flag == ipinfo::LOCAL) control[i].version = controlversion;
+        for( size_t i = 0; i < masterclients.size(); ++i ) masterclients[i]->lastcontrol = -1;
+        for( size_t i = 0; i < control.size(); ++i ) if(control[i].type < ipinfo::SYNCTYPES && control[i].flag == ipinfo::LOCAL) control[i].version = controlversion;
     }
     return controlversion;
 }
@@ -462,7 +463,7 @@ bool checkmasterclientinput(masterclient &c)
                     c.shouldping = true;
                     c.numpings = 0;
                     c.lastcontrol = controlversion;
-                    loopv(control) if(control[i].type < ipinfo::SYNCTYPES && control[i].flag == ipinfo::LOCAL)
+                    for( size_t i = 0; i < control.size(); ++i ) if(control[i].type < ipinfo::SYNCTYPES && control[i].flag == ipinfo::LOCAL)
                         masteroutf(c, "%s %u %u \"%s\"\n", ipinfotypes[control[i].type], control[i].ip, control[i].mask, control[i].reason);
                     if(c.isserver)
                     {
@@ -491,7 +492,7 @@ bool checkmasterclientinput(masterclient &c)
         {
             int servs = 0;
             masteroutf(c, "clearservers\n");
-            loopvj(masterclients)
+            for( size_t j = 0; j < masterclients.size(); ++j )
             {
                 masterclient &s = *masterclients[j];
                 if(!s.listserver) continue;
@@ -535,10 +536,10 @@ void checkmaster()
     ENET_SOCKETSET_EMPTY(writeset);
     ENET_SOCKETSET_ADD(readset, mastersocket);
     ENET_SOCKETSET_ADD(readset, pingsocket);
-    loopv(masterclients)
+    for( size_t i = 0; i < masterclients.size(); ++i )
     {
         masterclient &c = *masterclients[i];
-        if(c.authreqs.length()) purgeauths(c);
+        if(c.authreqs.size()) purgeauths(c);
         if(c.shouldping && (!c.lastping || ((!c.lastpong || ENET_TIME_GREATER(c.lastping, c.lastpong)) && ENET_TIME_DIFFERENCE(totalmillis, c.lastping) > uint(masterpingdelay))))
         {
             if(c.numpings < masterpingtries)
@@ -560,11 +561,11 @@ void checkmaster()
         }
         if(c.isserver && c.lastcontrol < controlversion)
         {
-            loopv(control) if(control[i].type < ipinfo::SYNCTYPES && control[i].flag == ipinfo::LOCAL && control[i].version > c.lastcontrol)
+            for( size_t i = 0; i < control.size(); ++i ) if(control[i].type < ipinfo::SYNCTYPES && control[i].flag == ipinfo::LOCAL && control[i].version > c.lastcontrol)
                 masteroutf(c, "%s %u %u %s\n", ipinfotypes[control[i].type], control[i].ip, control[i].mask, control[i].reason);
             c.lastcontrol = controlversion;
         }
-        if(c.outputpos < c.output.length()) ENET_SOCKETSET_ADD(writeset, c.socket);
+        if(c.outputpos < c.output.size()) ENET_SOCKETSET_ADD(writeset, c.socket);
         else ENET_SOCKETSET_ADD(readset, c.socket);
         maxsock = max(maxsock, c.socket);
     }
@@ -576,7 +577,7 @@ void checkmaster()
     {
         ENetAddress address;
         ENetSocket masterclientsocket = enet_socket_accept(mastersocket, &address);
-        if(masterclients.length() >= MASTER_LIMIT || (checkipinfo(control, ipinfo::BAN, address.host) && !checkipinfo(control, ipinfo::EXCEPT, address.host) && !checkipinfo(control, ipinfo::TRUST, address.host)))
+        if(masterclients.size() >= MASTER_LIMIT || (checkipinfo(control, ipinfo::BAN, address.host) && !checkipinfo(control, ipinfo::EXCEPT, address.host) && !checkipinfo(control, ipinfo::TRUST, address.host)))
         {
             enet_socket_destroy(masterclientsocket);
             break;
@@ -584,7 +585,7 @@ void checkmaster()
         if(masterduplimit && !checkipinfo(control, ipinfo::TRUST, address.host))
         {
             int dups = 0;
-            loopv(masterclients) if(masterclients[i]->address.host == address.host) dups++;
+            for( size_t i = 0; i < masterclients.size(); ++i ) if(masterclients[i]->address.host == address.host) dups++;
             if(dups >= masterduplimit)
             {
                 enet_socket_destroy(masterclientsocket);
@@ -597,28 +598,28 @@ void checkmaster()
             c->address = address;
             c->socket = masterclientsocket;
             c->lastactivity = totalmillis ? totalmillis : 1;
-            masterclients.add(c);
+            (masterclients.emplace_back( c ), masterclients.back());
             if(enet_address_get_host_ip(&c->address, c->name, sizeof(c->name)) < 0) copystring(c->name, "unknown");
             if(verbose) conoutf("master peer %s connected", c->name);
         }
         break;
     }
 
-    loopv(masterclients)
+    for( size_t i = 0; i < masterclients.size(); ++i )
     {
         masterclient &c = *masterclients[i];
-        if(c.outputpos < c.output.length() && ENET_SOCKETSET_CHECK(writeset, c.socket))
+        if(c.outputpos < c.output.size() && ENET_SOCKETSET_CHECK(writeset, c.socket))
         {
             ENetBuffer buf;
             buf.data = (void *)&c.output[c.outputpos];
-            buf.dataLength = c.output.length()-c.outputpos;
+            buf.dataLength = c.output.size()-c.outputpos;
             int res = enet_socket_send(c.socket, NULL, &buf, 1);
             if(res >= 0)
             {
                 c.outputpos += res;
-                if(c.outputpos >= c.output.length())
+                if(c.outputpos >= c.output.size())
                 {
-                    c.output.setsize(0);
+                    c.output.clear();
                     c.outputpos = 0;
                     if(c.shouldpurge) { purgemasterclient(i--); continue; }
                 }
@@ -639,7 +640,7 @@ void checkmaster()
             }
             else { purgemasterclient(i--); continue; }
         }
-        /* if(c.output.length() > OUTPUT_LIMIT) { purgemasterclient(i--); continue; } */
+        /* if(c.output.size() > OUTPUT_LIMIT) { purgemasterclient(i--); continue; } */
         if(ENET_TIME_DIFFERENCE(totalmillis, c.lastactivity) >= (c.isserver ? SERVER_TIME : CLIENT_TIME) || (checkipinfo(control, ipinfo::BAN, c.address.host) && !checkipinfo(control, ipinfo::EXCEPT, c.address.host) && !checkipinfo(control, ipinfo::TRUST, c.address.host)))
         {
             purgemasterclient(i--);
