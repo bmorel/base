@@ -1,3 +1,5 @@
+#include <vector>
+#include <string>
 #include <algorithm>
 using std::swap;
 #include "game.h"
@@ -18,26 +20,25 @@ namespace weapons
     int lastweapselect = 0;
     VAR(IDF_PERSIST, weapselectdelay, 0, 200, VAR_MAX);
 
-    vector<int> weaplist;
+    std::vector<int> weaplist;
     void buildweaplist(const char *str)
     {
-        vector<char *> list;
+        std::vector<std::string> list;
         explodelist(str, list);
-        weaplist.shrink(0);
-        loopv(list)
+        weaplist.clear();
+        for( size_t i = 0; i < list.size(); ++i )
         {
             int weap = -1;
-            if(isnumeric(list[i][0])) weap = atoi(list[i]);
-            else loopj(W_ALL) if(!strcasecmp(weaptype[j].name, list[i]))
+            if(isnumeric(list[i][0])) weap = atoi(list[i].data());
+            else loopj(W_ALL) if(!strcasecmp(weaptype[j].name, list[i].data()))
             {
                 weap = j;
                 break;
             }
-            if(isweap(weap) && weaplist.find(weap) < 0)
-                weaplist.add(weap);
+            if(isweap(weap) && find( weaplist, weap ) < 0)
+                (weaplist.emplace_back( weap ), weaplist.back());
         }
-        list.deletearrays();
-        loopi(W_ALL) if(weaplist.find(i) < 0) weaplist.add(i); // make sure all weapons have a slot
+        loopi(W_ALL) if(find( weaplist, i ) < 0) (weaplist.emplace_back( i ), weaplist.back()); // make sure all weapons have a slot
         changedkeys = lastmillis;
     }
     SVARF(IDF_PERSIST, weapselectlist, "", buildweaplist(weapselectlist));
@@ -338,7 +339,7 @@ namespace weapons
         vector<shotmsg> shots;
         #define addshot(p) \
         { \
-            shotmsg &s = shots.add(); \
+            shotmsg &s = (shots.emplace_back(  ), shots.back()); \
             s.id = d->getprojid(); \
             s.pos = ivec(int(p.x*DMF), int(p.y*DMF), int(p.z*DMF)); \
         }
@@ -376,7 +377,7 @@ namespace weapons
             }
         }
         projs::shootv(weap, secondary ? HIT_ALT : 0, sub, offset, scale, from, shots, d, true);
-        client::addmsg(N_SHOOT, "ri8iv", d->clientnum, lastmillis-game::maptime, weap, secondary ? HIT_ALT : 0, cooked, int(from.x*DMF), int(from.y*DMF), int(from.z*DMF), shots.length(), shots.length()*sizeof(shotmsg)/sizeof(int), shots.getbuf());
+        client::addmsg(N_SHOOT, "ri8iv", d->clientnum, lastmillis-game::maptime, weap, secondary ? HIT_ALT : 0, cooked, int(from.x*DMF), int(from.y*DMF), int(from.z*DMF), shots.size(), shots.size()*sizeof(shotmsg)/sizeof(int), shots.data());
 
         return true;
     }
