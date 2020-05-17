@@ -1,3 +1,4 @@
+#include <vector>
 #include <algorithm>
 using std::swap;
 #include "cube.h"
@@ -33,8 +34,8 @@ namespace gle
     static GLenum primtype = GL_TRIANGLES;
     static uchar *lastbuf = NULL;
     static bool changedattribs = false;
-    static vector<GLint> multidrawstart;
-    static vector<GLsizei> multidrawcount;
+    static std::vector<GLint> multidrawstart;
+    static std::vector<GLsizei> multidrawcount;
 
     #define MAXQUADS (0x10000/4)
     static GLuint quadindexes = 0;
@@ -237,18 +238,18 @@ namespace gle
 
     void multidraw()
     {
-        int start = multidrawstart.length() ? multidrawstart.last() + multidrawcount.last() : 0,
-            count = attribbuf.length()/vertexsize - start;
+        int start = multidrawstart.size() ? multidrawstart.back() + multidrawcount.back() : 0,
+            count = attribbuf.size()/vertexsize - start;
         if(count > 0)
         {
-            multidrawstart.add(start);
-            multidrawcount.add(count);
+            (multidrawstart.emplace_back( start ), multidrawstart.back());
+            (multidrawcount.emplace_back( count ), multidrawcount.back());
         }
     }
 
     int end()
     {
-        uchar *buf = attribbuf.getbuf();
+        uchar *buf = attribbuf.data();
         if(attribbuf.empty())
         {
             if(buf != attribdata)
@@ -263,7 +264,7 @@ namespace gle
         {
             if(buf == attribdata)
             {
-                if(vbooffset + attribbuf.length() >= MAXVBOSIZE)
+                if(vbooffset + attribbuf.size() >= MAXVBOSIZE)
                 {
                     if(!vbo) glGenBuffers_(1, &vbo);
                     glBindBuffer_(GL_ARRAY_BUFFER, vbo);
@@ -272,27 +273,27 @@ namespace gle
                 }
                 else if(!lastvertexsize) glBindBuffer_(GL_ARRAY_BUFFER, vbo);
                 void *dst = intel_mapbufferrange_bug ? NULL :
-                    glMapBufferRange_(GL_ARRAY_BUFFER, vbooffset, attribbuf.length(), GL_MAP_WRITE_BIT|GL_MAP_INVALIDATE_RANGE_BIT|GL_MAP_UNSYNCHRONIZED_BIT);
+                    glMapBufferRange_(GL_ARRAY_BUFFER, vbooffset, attribbuf.size(), GL_MAP_WRITE_BIT|GL_MAP_INVALIDATE_RANGE_BIT|GL_MAP_UNSYNCHRONIZED_BIT);
                 if(dst)
                 {
-                    memcpy(dst, attribbuf.getbuf(), attribbuf.length());
+                    memcpy(dst, attribbuf.data(), attribbuf.size());
                     glUnmapBuffer_(GL_ARRAY_BUFFER);
                 }
-                else glBufferSubData_(GL_ARRAY_BUFFER, vbooffset, attribbuf.length(), attribbuf.getbuf());
+                else glBufferSubData_(GL_ARRAY_BUFFER, vbooffset, attribbuf.size(), attribbuf.data());
             }
             else glUnmapBuffer_(GL_ARRAY_BUFFER);
             buf = (uchar *)0 + vbooffset;
             if(vertexsize == lastvertexsize && buf >= lastbuf)
             {
                 start = int(buf - lastbuf)/vertexsize;
-                if(primtype == GL_QUADS && (start%4 || start + attribbuf.length()/vertexsize >= 4*MAXQUADS))
+                if(primtype == GL_QUADS && (start%4 || start + attribbuf.size()/vertexsize >= 4*MAXQUADS))
                     start = 0;
                 else buf = lastbuf;
             }
-            vbooffset += attribbuf.length();
+            vbooffset += attribbuf.size();
         }
         setattribs(buf);
-        int numvertexes = attribbuf.length()/vertexsize;
+        int numvertexes = attribbuf.size()/vertexsize;
         if(primtype == GL_QUADS)
         {
             if(!quadsenabled) enablequads();
@@ -300,13 +301,13 @@ namespace gle
         }
         else
         {
-            if(multidrawstart.length())
+            if(multidrawstart.size())
             {
                 multidraw();
-                if(start) loopv(multidrawstart) multidrawstart[i] += start;
-                glMultiDrawArrays_(primtype, multidrawstart.getbuf(), multidrawcount.getbuf(), multidrawstart.length());
-                multidrawstart.setsize(0);
-                multidrawcount.setsize(0);
+                if(start) for( size_t i = 0; i < multidrawstart.size(); ++i ) multidrawstart[i] += start;
+                glMultiDrawArrays_(primtype, multidrawstart.data(), multidrawcount.data(), multidrawstart.size());
+                multidrawstart.clear();
+                multidrawcount.clear();
             }
             else glDrawArrays(primtype, start, numvertexes);
         }
