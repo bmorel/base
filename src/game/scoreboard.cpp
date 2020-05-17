@@ -1,19 +1,20 @@
+#include <vector>
 #include <algorithm>
 using std::swap;
 #include "game.h"
 
 namespace hud
 {
-    static vector<score> scores;
+    static std::vector<score> scores;
 
     score &teamscore(int team)
     {
-        loopv(scores)
+        for( size_t i = 0; i < scores.size(); ++i )
         {
             score &cs = scores[i];
             if(cs.team == team) return cs;
         }
-        score &cs = scores.add();
+        score &cs = (scores.emplace_back(  ), scores.back());
         cs.team = team;
         cs.total = 0;
         return cs;
@@ -21,14 +22,14 @@ namespace hud
 
     void resetscores()
     {
-        scores.shrink(0);
+        scores.clear();
     }
 
     struct scoregroup : score
     {
-        vector<gameent *> players;
+        std::vector<gameent *> players;
     };
-    vector<scoregroup *> groups;
+    std::vector<scoregroup *> groups;
     scoregroup spectators;
 
     VAR(IDF_PERSIST, autoscores, 0, 1, 3); // 1 = when dead, 2 = also in spectv, 3 = and in waittv too
@@ -124,15 +125,15 @@ namespace hud
             if(x->total > y->total) return true;
             if(x->total < y->total) return false;
         }
-        if(x->players.length() > y->players.length()) return true;
-        if(x->players.length() < y->players.length()) return false;
+        if(x->players.size() > y->players.size()) return true;
+        if(x->players.size() < y->players.size()) return false;
         return x->team && y->team && x->team < y->team;
     }
 
     int groupplayers()
     {
         int numgroups = 0;
-        spectators.players.shrink(0);
+        spectators.players.clear();
         int numdyns = game::numdynents();
         loopi(numdyns)
         {
@@ -140,7 +141,7 @@ namespace hud
             if(!o || o->actortype >= A_ENEMY || (!scoreconnecting && !o->name[0])) continue;
             if(o->state == CS_SPECTATOR)
             {
-                if(o != game::player1 || !client::demoplayback) spectators.players.add(o);
+                if(o != game::player1 || !client::demoplayback) (spectators.players.emplace_back( o ), spectators.players.back());
                 continue;
             }
             int team = m_play(game::gamemode) && m_team(game::gamemode, game::mutators) ? o->team : T_NEUTRAL;
@@ -150,24 +151,24 @@ namespace hud
                 scoregroup &g = *groups[j];
                 if(team != g.team) continue;
                 if(team) g.total = teamscore(team).total;
-                g.players.add(o);
+                (g.players.emplace_back( o ), g.players.back());
                 found = true;
                 break;
             }
             if(found) continue;
-            if(numgroups >= groups.length()) groups.add(new scoregroup);
+            if(numgroups >= groups.size()) (groups.emplace_back( new scoregroup ), groups.back());
             scoregroup &g = *groups[numgroups++];
             g.team = team;
             if(!team) g.total = 0;
             else if(m_team(game::gamemode, game::mutators)) g.total = teamscore(o->team).total;
             else g.total = o->points;
 
-            g.players.shrink(0);
-            g.players.add(o);
+            g.players.clear();
+            (g.players.emplace_back( o ), g.players.back());
         }
-        loopi(numgroups) groups[i]->players.sort(playersort);
-        spectators.players.sort(playersort);
-        groups.sort(scoregroupcmp, 0, numgroups);
+        loopi(numgroups) std::sort( groups[i]->players.begin(), groups[i]->players.end(), playersort );
+        std::sort( spectators.players.begin(), spectators.players.end(), playersort );
+        std::sort( groups.begin(), groups.begin() + numgroups, scoregroupcmp );
         return numgroups;
     }
 
@@ -195,7 +196,7 @@ namespace hud
                 scoregroup &sg = *groups[0];
                 if(m_team(game::gamemode, game::mutators))
                 {
-                    int anc = sg.players.find(game::player1) >= 0 ? S_V_YOUWIN : (game::player1->state != CS_SPECTATOR ? S_V_YOULOSE : -1);
+                    int anc = find( sg.players, game::player1 ) >= 0 ? S_V_YOUWIN : (game::player1->state != CS_SPECTATOR ? S_V_YOULOSE : -1);
                     if(m_defend(game::gamemode) && sg.total == INT_MAX)
                         game::announcef(anc, CON_MESG, NULL, true, "\fwteam %s secured all flags", game::colourteam(sg.team));
                     else
@@ -222,10 +223,10 @@ namespace hud
                     int anc = sg.players[0] == game::player1 ? S_V_YOUWIN : (game::player1->state != CS_SPECTATOR ? S_V_YOULOSE : -1);
                     if(m_laptime(game::gamemode, game::mutators))
                     {
-                        if(sg.players.length() > 1 && sg.players[0]->cptime == sg.players[1]->cptime)
+                        if(sg.players.size() > 1 && sg.players[0]->cptime == sg.players[1]->cptime)
                         {
                             string winner = "";
-                            loopv(sg.players) if(i)
+                            for( size_t i = 0; i < sg.players.size(); ++i ) if(i)
                             {
                                 if(sg.players[0]->cptime == sg.players[i]->cptime)
                                 {
@@ -240,10 +241,10 @@ namespace hud
                     }
                     else
                     {
-                        if(sg.players.length() > 1 && sg.players[0]->points == sg.players[1]->points)
+                        if(sg.players.size() > 1 && sg.players[0]->points == sg.players[1]->points)
                         {
                             string winner = "";
-                            loopv(sg.players) if(i)
+                            for( size_t i = 0; i < sg.players.size(); ++i ) if(i)
                             {
                                 if(sg.players[0]->points == sg.players[i]->points)
                                 {
@@ -465,7 +466,7 @@ namespace hud
                     if(scorespectators && !spectators.players.empty()) ngroup++;
                     #define loopscorelist(b) \
                     { \
-                        int _n = sg.players.length(); \
+                        int _n = sg.players.size(); \
                         loopi(_n) if(sg.players[i]) \
                         { \
                             b; \
@@ -473,7 +474,7 @@ namespace hud
                     }
                     #define loopscoregroup(b) \
                     { \
-                        loopv(sg.players) if(sg.players[i]) \
+                        for( size_t i = 0; i < sg.players.size(); ++i ) if(sg.players[i]) \
                         { \
                             gameent *o = sg.players[i]; \
                             b; \
@@ -810,8 +811,8 @@ namespace hud
                                         loopscoregroup(uilist(g, {
                                             const char *status = questiontex;
                                             if(k == numgroups) status = spectatortex;
-                                            else if(game::player1->dominating.find(o) >= 0) status = dominatedtex;
-                                            else if(game::player1->dominated.find(o) >= 0) status = dominatingtex;
+                                            else if(find( game::player1->dominating, o ) >= 0) status = dominatedtex;
+                                            else if(find( game::player1->dominated, o ) >= 0) status = dominatingtex;
                                             else switch(o->state)
                                             {
                                                 case CS_ALIVE: status = playertex; break;
@@ -921,7 +922,7 @@ namespace hud
                 else
                 {
                     if(sg.team) continue;
-                    loopvj(sg.players)
+                    for( size_t j = 0; j < sg.players.size(); ++j )
                     {
                         gameent *d = sg.players[j];
                         realpos++;
@@ -933,7 +934,7 @@ namespace hud
                         if((d != game::focus) == !i) continue;
                         float sk = numout && inventoryscoreshrink > 0 ? 1.f-min(numout*inventoryscoreshrink, inventoryscoreshrinkmax) : 1;
                         int score = m_laptime(game::gamemode, game::mutators) ? d->cptime : d->points,
-                            offset = (sg.players.length() > 1 && (!m_laptime(game::gamemode, game::mutators) || score)) ? score-(m_laptime(game::gamemode, game::mutators) ? sg.players[j ? 0 : 1]->cptime : sg.players[j ? 0 : 1]->points) : 0;
+                            offset = (sg.players.size() > 1 && (!m_laptime(game::gamemode, game::mutators) || score)) ? score-(m_laptime(game::gamemode, game::mutators) ? sg.players[j ? 0 : 1]->cptime : sg.players[j ? 0 : 1]->points) : 0;
                         sy += drawscoreitem(inventoryscorename ? game::colourname(d) : NULL, game::getcolour(d, game::playerteamtone, game::playerteamtonelevel), x, y+sy, s, sk*inventoryscoresize, blend*inventoryblend, pos, score, offset);
                         if(++numout >= count) return sy;
                     }
