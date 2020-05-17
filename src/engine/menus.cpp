@@ -47,22 +47,24 @@ struct menu : guicb
 
 struct delayedupdate
 {
+private:
     enum
     {
         INT,
         FLOAT,
         STRING,
         ACTION
-    } type;
-    ident *id;
+    } type = ACTION;
+    ident *id = nullptr;
     union
     {
         int i;
         float f;
-        char *s;
+        char *s = nullptr;
     } val;
     bool world;
-    delayedupdate() : type(ACTION), id(NULL) { val.s = NULL; }
+public:
+    delayedupdate()  { val.s = NULL; }
     ~delayedupdate() { if(type == STRING || type == ACTION) DELETEA(val.s); }
 
     void schedule(const char *s) { type = ACTION; val.s = newstring(s); world = (identflags&IDF_WORLD)!=0; }

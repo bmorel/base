@@ -507,7 +507,7 @@ static inline bool vismatcmp(const materialsurface *xm, const materialsurface *y
     return false;
 }
 
-void sortmaterials(std::vector<materialsurface *> &vismats)
+void sortmaterials(vector<materialsurface *> &vismats)
 {
     sortorigin = ivec(camera1->o);
     if(reflecting) sortorigin.z = int(reflectz - (camera1->o.z - reflectz));
@@ -536,10 +536,10 @@ void sortmaterials(std::vector<materialsurface *> &vismats)
         }
     }
     sortedit = editmode && showmat && !drawtex;
-    std::sort( vismats.begin(), vismats.end(), vismatcmp );
+    vismats.sort( vismatcmp );
 }
 
-void rendermatgrid(std::vector<materialsurface *> &vismats)
+void rendermatgrid(vector<materialsurface *> &vismats)
 {
     enablepolygonoffset(GL_POLYGON_OFFSET_LINE);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -632,7 +632,7 @@ VARF(IDF_PERSIST, waterfallenv, 0, 1, 1, preloadwatershaders());
 
 void rendermaterials()
 {
-    std::vector<materialsurface *> vismats;
+    vector<materialsurface *> vismats;
     sortmaterials(vismats);
     if(vismats.empty()) return;
 
