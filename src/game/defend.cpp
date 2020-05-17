@@ -1,3 +1,4 @@
+#include <vector>
 #include <algorithm>
 using std::swap;
 #include "game.h"
@@ -30,10 +31,11 @@ namespace defend
 
     void checkcams(vector<cament *> &cameras)
     {
-        loopv(st.flags) // flags/bases
+        for( size_t i = 0; i < st.flags.size(); ++i ) // flags/bases
         {
             defendstate::flag &f = st.flags[i];
-            cament *c = cameras.add(new cament(cameras.length(), cament::AFFINITY, i));
+            cameras.emplace_back(new cament(cameras.size(), cament::AFFINITY, i));
+            cament *c = cameras.back();
             c->o = f.o;
             c->o.z += enttype[AFFINITY].radius*2/3;
         }
@@ -45,7 +47,7 @@ namespace defend
         {
             case cament::AFFINITY:
             {
-                if(st.flags.inrange(c->id))
+                if(( 0 <= c->id && c->id < st.flags.size() ))
                 {
                     defendstate::flag &f = st.flags[c->id];
                     c->o = f.o;
@@ -61,7 +63,7 @@ namespace defend
 
     void render()
     {
-        loopv(st.flags)
+        for( size_t i = 0; i < st.flags.size(); ++i )
         {
             defendstate::flag &b = st.flags[i];
             float occupy = b.occupied(m_dac_quick(game::gamemode, game::mutators), defendcount);
@@ -99,7 +101,7 @@ namespace defend
 
     void adddynlights()
     {
-        loopv(st.flags)
+        for( size_t i = 0; i < st.flags.size(); ++i )
         {
             defendstate::flag &f = st.flags[i];
             float occupy = f.occupied(m_dac_quick(game::gamemode, game::mutators), defendcount);
@@ -109,7 +111,7 @@ namespace defend
 
     void drawblips(int w, int h, float blend)
     {
-        loopv(st.flags)
+        for( size_t i = 0; i < st.flags.size(); ++i )
         {
             defendstate::flag &f = st.flags[i];
             float occupy = f.occupied(m_dac_quick(game::gamemode, game::mutators), defendcount);
@@ -143,7 +145,7 @@ namespace defend
     {
         if(game::focus->state == CS_ALIVE && hud::showevents >= 2)
         {
-            loopv(st.flags) if(insideaffinity(st.flags[i], game::focus) && (st.flags[i].owner == game::focus->team || st.flags[i].enemy == game::focus->team))
+            for( size_t i = 0; i < st.flags.size(); ++i ) if(insideaffinity(st.flags[i], game::focus) && (st.flags[i].owner == game::focus->team || st.flags[i].enemy == game::focus->team))
             {
                 defendstate::flag &f = st.flags[i];
                 float occupy = !f.owner || f.enemy ? clamp(f.converted/float(defendcount), 0.f, 1.f) : 1.f;
@@ -156,16 +158,16 @@ namespace defend
 
     int drawinventory(int x, int y, int s, int m, float blend)
     {
-        int sy = 0, numflags = st.flags.length(), estsize = ((numflags-1)*s*hud::inventoryskew)+s, fitsize = y-m, size = s;
+        int sy = 0, numflags = st.flags.size(), estsize = ((numflags-1)*s*hud::inventoryskew)+s, fitsize = y-m, size = s;
         if(estsize > fitsize) size = int((fitsize/float(estsize))*s);
-        loopv(st.flags)
+        for( size_t i = 0; i < st.flags.size(); ++i )
         {
             if(y-sy-size < m) break;
             defendstate::flag &f = st.flags[i];
             bool hasflag = game::focus->state == CS_ALIVE && insideaffinity(f, game::focus);
             if(f.hasflag != hasflag) { f.hasflag = hasflag; f.lasthad = lastmillis-max(1000-(lastmillis-f.lasthad), 0); }
             int millis = lastmillis-f.lasthad;
-            bool headsup = hud::chkcond(hud::inventorygame, game::player1->state == CS_SPECTATOR || f.owner == game::focus->team || st.flags.length() == 1);
+            bool headsup = hud::chkcond(hud::inventorygame, game::player1->state == CS_SPECTATOR || f.owner == game::focus->team || st.flags.size() == 1);
             if(headsup || f.hasflag || millis <= 1000)
             {
                 float skew = headsup ? hud::inventoryskew : 0.f,
@@ -205,7 +207,7 @@ namespace defend
     void setup()
     {
         int df = m_dac_king(game::gamemode, game::mutators) ? 0 : defendflags;
-        loopv(entities::ents)
+        for( size_t i = 0; i < entities::ents.size(); ++i )
         {
             extentity *e = entities::ents[i];
             if(e->type != AFFINITY || !m_check(e->attrs[3], e->attrs[4], game::gamemode, game::mutators)) continue;
@@ -227,20 +229,20 @@ namespace defend
             const char *name = getalias(alias);
             if(!name || !*name)
             {
-                formatstring(alias, "point #%d", st.flags.length()+1);
+                formatstring(alias, "point #%d", st.flags.size()+1);
                 name = alias;
             }
             st.addaffinity(e->o, team, e->attrs[1], e->attrs[2], name);
         }
-        if(!st.flags.length()) return; // map doesn't seem to support this mode at all..
+        if(!st.flags.size()) return; // map doesn't seem to support this mode at all..
         bool hasteams = df != 0;
         if(hasteams)
         {
             int bases[T_ALL] = {0};
-            loopv(st.flags) bases[st.flags[i].kinship]++;
+            for( size_t i = 0; i < st.flags.size(); ++i ) bases[st.flags[i].kinship]++;
             loopi(numteams(game::gamemode, game::mutators)-1) if(!bases[i+1] || (bases[i+1] != bases[i+2]))
             {
-                loopvk(st.flags) st.flags[k].kinship = T_NEUTRAL;
+                for( size_t k = 0; k < st.flags.size(); ++k ) st.flags[k].kinship = T_NEUTRAL;
                 hasteams = false;
                 break;
             }
@@ -249,28 +251,28 @@ namespace defend
         {
             vec average(0, 0, 0);
             int count = 0;
-            loopv(st.flags)
+            for( size_t i = 0; i < st.flags.size(); ++i )
             {
                 average.add(st.flags[i].o);
                 count++;
             }
-            int smallest = rnd(st.flags.length());
+            int smallest = rnd(st.flags.size());
             if(count)
             {
                 average.div(count);
                 float dist = 1e16f, tdist = 1e16f;
-                loopv(st.flags) if(!st.flags.inrange(smallest) || (tdist = st.flags[i].o.dist(average)) < dist)
+                for( size_t i = 0; i < st.flags.size(); ++i ) if(!( 0 <= smallest && smallest < st.flags.size() ) || (tdist = st.flags[i].o.dist(average)) < dist)
                 {
                     smallest = i;
                     dist = tdist;
                 }
             }
-            if(st.flags.inrange(smallest))
+            if(( 0 <= smallest && smallest < st.flags.size() ))
             {
                 copystring(st.flags[smallest].name, "center");
                 st.flags[smallest].kinship = T_NEUTRAL;
-                loopi(smallest) st.flags.remove(0);
-                while(st.flags.length() > 1) st.flags.remove(1);
+                loopi(smallest) st.flags.erase( st.flags.begin() + 0 );
+                while(st.flags.size() > 1) st.flags.erase( st.flags.begin() + 1 );
             }
         }
     }
@@ -278,8 +280,8 @@ namespace defend
     void sendaffinity(packetbuf &p)
     {
         putint(p, N_SETUPAFFIN);
-        putint(p, st.flags.length());
-        loopv(st.flags)
+        putint(p, st.flags.size());
+        for( size_t i = 0; i < st.flags.size(); ++i )
         {
             defendstate::flag &b = st.flags[i];
             putint(p, b.kinship);
@@ -293,7 +295,7 @@ namespace defend
     void parseaffinity(ucharbuf &p)
     {
         int numflags = getint(p);
-        while(st.flags.length() > numflags) st.flags.pop();
+        while(st.flags.size() > numflags) (st.flags.back(),st.flags.pop_back());
         loopi(numflags)
         {
             int kin = getint(p), yaw = getint(p), pitch = getint(p), converted = getint(p), owner = getint(p), enemy = getint(p);
@@ -303,14 +305,14 @@ namespace defend
             getstring(name, p);
             if(p.overread()) break;
             if(i >= MAXPARAMS) continue;
-            while(!st.flags.inrange(i)) st.flags.add();
+            while(!( 0 <= i && i < st.flags.size() )) (st.flags.emplace_back(  ), st.flags.back());
             st.initaffinity(i, kin, yaw, pitch, o, owner, enemy, converted, name);
         }
     }
 
     void updateaffinity(int i, int owner, int enemy, int converted)
     {
-        if(!st.flags.inrange(i)) return;
+        if(!( 0 <= i && i < st.flags.size() )) return;
         defendstate::flag &b = st.flags[i];
         if(converted >= 0)
         {
@@ -358,23 +360,23 @@ namespace defend
         if(d->actortype == A_BOT)
         {
             vec pos = d->feetpos();
-            loopvj(st.flags)
+            for( size_t j = 0; j < st.flags.size(); ++j )
             {
                 defendstate::flag &f = st.flags[j];
                 static vector<int> targets; // build a list of others who are interested in this
-                targets.setsize(0);
+                targets.clear();
                 ai::checkothers(targets, d, ai::AI_S_DEFEND, ai::AI_T_AFFINITY, j, true);
                 gameent *e = NULL;
                 bool regen = !m_regen(game::gamemode, game::mutators) || d->health >= m_health(game::gamemode, game::mutators, d->actortype);
                 int numdyns = game::numdynents();
                 loopi(numdyns) if((e = (gameent *)game::iterdynents(i)) && !e->ai && e->state == CS_ALIVE && d->team == e->team)
                 {
-                    if(targets.find(e->clientnum) < 0 && e->feetpos().squaredist(f.o) <= (enttype[AFFINITY].radius*enttype[AFFINITY].radius))
-                        targets.add(e->clientnum);
+                    if(find( targets, e->clientnum ) < 0 && e->feetpos().squaredist(f.o) <= (enttype[AFFINITY].radius*enttype[AFFINITY].radius))
+                        (targets.emplace_back( e->clientnum ), targets.back());
                 }
                 if((!regen && f.owner == d->team) || (targets.empty() && (f.owner != d->team || f.enemy)))
                 {
-                    ai::interest &n = interests.add();
+                    ai::interest &n = (interests.emplace_back(  ), interests.back());
                     n.state = ai::AI_S_DEFEND;
                     n.node = ai::closestwaypoint(f.o, ai::CLOSEDIST, false);
                     n.target = j;
@@ -390,7 +392,7 @@ namespace defend
 
     bool aidefense(gameent *d, ai::aistate &b)
     {
-        if(st.flags.inrange(b.target))
+        if(( 0 <= b.target && b.target < st.flags.size() ))
         {
             defendstate::flag &f = st.flags[b.target];
             bool regen = d->actortype != A_BOT || !m_regen(game::gamemode, game::mutators) || d->health >= m_health(game::gamemode, game::mutators, d->actortype);
@@ -399,7 +401,7 @@ namespace defend
             {
                 int teammembers = 1;
                 static vector<int> targets; // build a list of others who are interested in this
-                targets.setsize(0);
+                targets.clear();
                 ai::checkothers(targets, d, ai::AI_S_DEFEND, ai::AI_T_AFFINITY, b.target, true);
                 if(d->actortype == A_BOT)
                 {
@@ -409,11 +411,11 @@ namespace defend
                     loopi(numdyns) if((e = (gameent *)game::iterdynents(i)) && d->team == e->team)
                     {
                         teammembers++;
-                        if(e->state != CS_ALIVE || e->ai || targets.find(e->clientnum) < 0) continue;
-                        if(e->feetpos().squaredist(f.o) <= mindist) targets.add(e->clientnum);
+                        if(e->state != CS_ALIVE || e->ai || find( targets, e->clientnum ) < 0) continue;
+                        if(e->feetpos().squaredist(f.o) <= mindist) (targets.emplace_back( e->clientnum ), targets.back());
                     }
                 }
-                if(targets.length() >= teammembers*0.5f)
+                if(targets.size() >= teammembers*0.5f)
                 {
                     if(lastmillis-b.millis >= (201-d->skill)*33)
                     {
