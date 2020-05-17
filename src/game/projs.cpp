@@ -1,3 +1,4 @@
+#include <vector>
 #include <algorithm>
 using std::swap;
 #include "game.h"
@@ -5,7 +6,7 @@ namespace projs
 {
     #define FWCOL(n,c,p) ((p).flags&HIT_FLAK ? W##n##COL(&p, (p).weap, flak##c, WS((p).flags)) : W##n##COL(&p, (p).weap, c, WS((p).flags)))
 
-    vector<hitmsg> hits;
+    std::vector<hitmsg> hits;
     vector<projent *> projs, collideprojs;
 
     struct toolent
@@ -14,7 +15,7 @@ namespace projs
         float radius;
         vec o;
     };
-    vector<toolent> teleports, pushers;
+    std::vector<toolent> teleports, pushers;
 
     VAR(IDF_PERSIST, shadowdebris, 0, 0, 1);
     VAR(IDF_PERSIST, shadowgibs, 0, 1, 1);
@@ -155,7 +156,7 @@ namespace projs
             if(damage) game::hiteffect(proj.weap, hflags, damage, d, proj.owner, dir, vel, dist, false);
             else return;
         }
-        hitmsg &h = hits.add();
+        hitmsg &h = (hits.emplace_back(  ), hits.back());
         h.flags = flags;
         h.proj = 0;
         h.target = d->clientnum;
@@ -171,7 +172,7 @@ namespace projs
             if(p->local) p->state = CS_DEAD;
             else
             {
-                hitmsg &h = hits.add();
+                hitmsg &h = (hits.emplace_back(  ), hits.back());
                 h.flags = HIT_PROJ|HIT_TORSO;
                 h.proj = p->id;
                 h.target = p->owner->clientnum;
@@ -308,7 +309,7 @@ namespace projs
 
     void remove(gameent *owner)
     {
-        loopv(projs)
+        for( size_t i = 0; i < projs.size(); ++i )
         {
             if(projs[i]->target == owner) projs[i]->target = NULL;
             if(projs[i]->stick == owner)
@@ -323,7 +324,11 @@ namespace projs
                 {
                     if(projs[i]->projcollide&COLLIDE_PROJ)
                     {
-                        collideprojs.removeobj(projs[i]);
+                        auto it = std::find( collideprojs.begin(), collideprojs.end(), projs[i] );
+                        if( collideprojs.end() != it )
+                        {
+                            collideprojs.erase( it );
+                        }
                         cleardynentcache();
                     }
                     delete projs[i];
@@ -336,7 +341,7 @@ namespace projs
 
     void destruct(gameent *d, int id)
     {
-        loopv(projs) if(projs[i]->owner == d && projs[i]->projtype == PRJ_SHOT && projs[i]->id == id)
+        for( size_t i = 0; i < projs.size(); ++i ) if(projs[i]->owner == d && projs[i]->projtype == PRJ_SHOT && projs[i]->id == id)
         {
             projs[i]->state = CS_DEAD;
             break;
@@ -426,7 +431,7 @@ namespace projs
 
     void sticky(gameent *d, int id, vec &norm, vec &pos, gameent *f)
     {
-        loopv(projs) if(projs[i]->owner == d && projs[i]->projtype == PRJ_SHOT && projs[i]->id == id)
+        for( size_t i = 0; i < projs.size(); ++i ) if(projs[i]->owner == d && projs[i]->projtype == PRJ_SHOT && projs[i]->id == id)
         {
             projs[i]->stuck = projs[i]->lastbounce = lastmillis ? lastmillis : 1;
             projs[i]->sticknrm = norm;
@@ -437,11 +442,11 @@ namespace projs
         }
     }
 
-    bool checkitems(projent &proj, vector<toolent> &list, const vec &ray = vec(0, 0, 0), float dist = 0.f, bool teleport = false)
+    bool checkitems(projent &proj, std::vector<toolent> &list, const vec &ray = vec(0, 0, 0), float dist = 0.f, bool teleport = false)
     {
         float closedist = 1e16f;
         int closeent = -1;
-        loopv(list)
+        for( size_t i = 0; i < list.size(); ++i )
         {
             if(teleport)
             {
@@ -467,7 +472,7 @@ namespace projs
                 closedist = test;
             }
         }
-        if(entities::ents.inrange(closeent))
+        if(( 0 <= closeent && closeent < entities::ents.size() ))
         {
             entities::execitem(closeent, &proj, proj.o, closedist);
             return true;
@@ -484,17 +489,17 @@ namespace projs
 
     void reset()
     {
-        collideprojs.setsize(0);
+        collideprojs.clear();
         cleardynentcache();
-        projs.deletecontents();
-        projs.shrink(0);
-        teleports.shrink(0);
-        pushers.shrink(0);
-        loopv(entities::ents) switch(entities::ents[i]->type)
+        projs.clear();
+        projs.clear();
+        teleports.clear();
+        pushers.clear();
+        for( size_t i = 0; i < entities::ents.size(); ++i ) switch(entities::ents[i]->type)
         {
             case TELEPORT: case PUSHER:
             {
-                toolent &t = entities::ents[i]->type == TELEPORT ? teleports.add() : pushers.add();
+                toolent &t = entities::ents[i]->type == TELEPORT ? (teleports.emplace_back(  ), teleports.back()) : (pushers.emplace_back(  ), pushers.back());
                 t.ent = i;
                 t.radius = entities::ents[i]->attrs[3] > 0 ? entities::ents[i]->attrs[3] : enttype[entities::ents[i]->type].radius;
                 t.o = entities::ents[i]->o;
@@ -578,7 +583,7 @@ namespace projs
                 {
                     if(m_capture(game::gamemode) && capturerepulsion > 0)
                     {
-                        loopv(projs) if(projs[i]->projtype == PRJ_AFFINITY && projs[i] != &proj)
+                        for( size_t i = 0; i < projs.size(); ++i ) if(projs[i]->projtype == PRJ_AFFINITY && projs[i] != &proj)
                             repel(projs[i]->o, capturerepulsion, capturerepelspeed);
                     }
                     break;
@@ -769,7 +774,7 @@ namespace projs
             case PRJ_EJECT: proj.height = proj.aboveeye = 0.25f*size; proj.radius = proj.yradius = 0.5f*size; proj.xradius = 0.125f*size; break;
             case PRJ_ENT:
             {
-                if(entities::ents.inrange(proj.id))
+                if(( 0 <= proj.id && proj.id < entities::ents.size() ))
                     proj.height = proj.aboveeye = proj.radius = proj.xradius = proj.yradius = enttype[entities::ents[proj.id]->type].radius*0.25f*size;
                 else proj.height = proj.aboveeye = proj.radius = proj.xradius = proj.yradius = size;
                 break;
@@ -834,7 +839,7 @@ namespace projs
                 updatetargets(proj, waited ? 1 : 0);
                 if(WF(WK(proj.flags), proj.weap, guided, WS(proj.flags)) != 0 && proj.owner)
                     findorientation(proj.owner->o, proj.owner->yaw, proj.owner->pitch, proj.dest);
-                if(proj.projcollide&COLLIDE_PROJ) collideprojs.add(&proj);
+                if(proj.projcollide&COLLIDE_PROJ) (collideprojs.emplace_back( &proj ), collideprojs.back());
                 break;
             }
             case PRJ_GIBS:
@@ -1142,7 +1147,7 @@ namespace projs
         {
             if(ammo >= 0)
             {
-                if(entities::ents.inrange(ent))
+                if(( 0 <= ent && ent < entities::ents.size() ))
                     create(d->muzzlepos(), d->muzzlepos(), local, d, PRJ_ENT, -1, HIT_NONE, w_spawn(weap), w_spawn(weap), 1, 1, ent, ammo, index);
                 d->ammo[weap] = -1;
                 if(targ >= 0) d->setweapstate(weap, W_S_SWITCH, weaponswitchdelay, lastmillis);
@@ -1230,7 +1235,7 @@ namespace projs
             int peak = delayattack/4, fade = min(peak/2, 75);
             adddynlight(from, 32, vec::hexcolor(colour).mul(0.5f), fade, peak - fade, DL_FLASH);
         }
-        loopv(shots)
+        for( size_t i = 0; i < shots.size(); ++i )
             create(from, vec(shots[i].pos).div(DMF), local, d, PRJ_SHOT, weap, flags, max(life, 1), W2(weap, time, WS(flags)), delay+(iter*i), speed, shots[i].id, weap, -1, flags, skew);
         if(ejectfade && weaptype[weap].eject && *weaptype[weap].eprj) loopi(clamp(sub, 1, W2(weap, ammosub, WS(flags))))
             create(from, from, local, d, PRJ_EJECT, -1, HIT_NONE, rnd(ejectfade)+ejectfade, 0, delay, rnd(weaptype[weap].espeed)+weaptype[weap].espeed, 0, weap, -1, flags);
@@ -1619,7 +1624,11 @@ namespace projs
         proj.lifespan = clamp((proj.lifemillis-proj.lifetime)/float(max(proj.lifemillis, 1)), 0.f, 1.f);
         if(proj.projcollide&COLLIDE_PROJ)
         {
-            collideprojs.removeobj(&proj);
+            auto it = std::find( collideprojs.begin(), collideprojs.end(), &proj );
+            if( collideprojs.end() != it )
+            {
+                collideprojs.erase( it );
+            }
             cleardynentcache();
         }
         switch(proj.projtype)
@@ -1783,8 +1792,8 @@ namespace projs
             case PRJ_AFFINITY:
             {
                 if(proj.beenused <= 1) client::addmsg(N_RESETAFFIN, "ri", proj.id);
-                if(m_capture(game::gamemode) && capture::st.flags.inrange(proj.id)) capture::st.flags[proj.id].proj = NULL;
-                else if(m_bomber(game::gamemode) && bomber::st.flags.inrange(proj.id)) bomber::st.flags[proj.id].proj = NULL;
+                if(m_capture(game::gamemode) && ( 0 <= proj.id && proj.id < capture::st.flags.size() )) capture::st.flags[proj.id].proj = NULL;
+                else if(m_bomber(game::gamemode) && ( 0 <= proj.id && proj.id < bomber::st.flags.size() )) bomber::st.flags[proj.id].proj = NULL;
                 break;
             }
             default: break;
@@ -2229,12 +2238,12 @@ namespace projs
         canrem(projent *p, float dist = 0) : p(p), dist(dist) {}
         ~canrem() {}
 
-        static bool cmsort(const canrem *a, const canrem *b)
+        static bool cmsort(const canrem &a, const canrem &b)
         {
-            if(a->dist > b->dist) return true;
-            if(a->dist < b->dist) return false;
-            if(a->p->addtime < b->p->addtime) return true;
-            if(a->p->addtime > b->p->addtime) return false;
+            if(a.dist > b.dist) return true;
+            if(a.dist < b.dist) return false;
+            if(a.p->addtime < b.p->addtime) return true;
+            if(a.p->addtime > b.p->addtime) return false;
             return false;
         }
     };
@@ -2242,22 +2251,23 @@ namespace projs
 
     void update()
     {
-        vector<canrem *> canremove;
-        loopvrev(projs) if(projs[i]->projtype == PRJ_DEBRIS || projs[i]->projtype == PRJ_GIBS || projs[i]->projtype == PRJ_EJECT)
-            canremove.add(new canrem(projs[i], camera1->o.dist(projs[i]->o)));
-        int count = canremove.length()-maxprojectiles;
+        std::vector<canrem> canremove;
+        canremove.reserve( projs.size() );
+        for( ssize_t i = projs.size() - 1; i >= 0; --i ) if(projs[i]->projtype == PRJ_DEBRIS || projs[i]->projtype == PRJ_GIBS || projs[i]->projtype == PRJ_EJECT)
+            canremove.emplace_back(projs[i], camera1->o.dist(projs[i]->o));
+        int count = canremove.size()-maxprojectiles;
         if(count > 0)
         {
-            canremove.sort(canrem::cmsort);
+            std::sort( canremove.begin(), canremove.end(), canrem::cmsort );
             loopi(count)
             {
-                canremove[i]->p->state = CS_DEAD;
-                canremove[i]->p->escaped = true;
+                canremove[i].p->state = CS_DEAD;
+                canremove[i].p->escaped = true;
             }
         }
-        canremove.deletecontents();
+        canremove.clear();
 
-        loopv(projs)
+        for( size_t i = 0; i < projs.size(); ++i )
         {
             projent &proj = *projs[i];
             if(proj.projtype == PRJ_SHOT && WF(WK(proj.flags), proj.weap, radial, WS(proj.flags)))
@@ -2265,10 +2275,10 @@ namespace projs
                 proj.hit = NULL;
                 proj.hitflags = HITFLAG_NONE;
             }
-            hits.setsize(0);
+            hits.clear();
             if((proj.projtype != PRJ_SHOT || proj.owner) && proj.state != CS_DEAD)
             {
-                if(proj.projtype == PRJ_ENT && entities::ents.inrange(proj.id) && !entities::simpleitems) // in case spawnweapon changes
+                if(proj.projtype == PRJ_ENT && ( 0 <= proj.id && proj.id < entities::ents.size() ) && !entities::simpleitems) // in case spawnweapon changes
                     proj.mdl = entities::entmdlname(entities::ents[proj.id]->type, entities::ents[proj.id]->attrs);
                 if(proj.waittime > 0)
                 {
@@ -2382,7 +2392,7 @@ namespace projs
                 }
                 if(!hits.empty())
                     client::addmsg(N_DESTROY, "ri9iv", proj.owner->clientnum, lastmillis-game::maptime, proj.weap, proj.fromweap, proj.fromflags, proj.flags, WK(proj.flags) ? -proj.id : proj.id,
-                            int(expl*DNF), int(proj.curscale*DNF), hits.length(), hits.length()*sizeof(hitmsg)/sizeof(int), hits.getbuf());
+                            int(expl*DNF), int(proj.curscale*DNF), hits.size(), hits.size()*sizeof(hitmsg)/sizeof(int), hits.data());
             }
             if(proj.state == CS_DEAD)
             {
@@ -2420,10 +2430,10 @@ namespace projs
 
     void render()
     {
-        loopv(projs) if(projs[i]->ready(false) && projs[i]->projtype != PRJ_AFFINITY)
+        for( size_t i = 0; i < projs.size(); ++i ) if(projs[i]->ready(false) && projs[i]->projtype != PRJ_AFFINITY)
         {
             projent &proj = *projs[i];
-            if((proj.projtype == PRJ_ENT && !entities::ents.inrange(proj.id)) || !projs[i]->mdl || !*projs[i]->mdl) continue;
+            if((proj.projtype == PRJ_ENT && !( 0 <= proj.id && proj.id < entities::ents.size() )) || !projs[i]->mdl || !*projs[i]->mdl) continue;
             float trans = 1, size = projs[i]->curscale, yaw = proj.yaw, pitch = proj.pitch, roll = proj.roll;
             int flags = MDL_CULL_VFC|MDL_CULL_OCCLUDED|MDL_LIGHT|MDL_CULL_DIST;
             switch(proj.projtype)
@@ -2491,7 +2501,7 @@ namespace projs
                     if(entities::simpleitems) continue;
                     if(shadowents) flags |= MDL_DYNSHADOW;
                     fadeproj(proj, trans, size);
-                    if(entities::ents.inrange(proj.id))
+                    if(( 0 <= proj.id && proj.id < entities::ents.size() ))
                     {
                         gameentity &e = *(gameentity *)entities::ents[proj.id];
                         if(e.type == WEAPON)
@@ -2517,7 +2527,7 @@ namespace projs
 
     void adddynlights()
     {
-        loopv(projs) if(projs[i]->ready() && projs[i]->projtype == PRJ_SHOT && !projs[i]->limited && !projs[i]->child)
+        for( size_t i = 0; i < projs.size(); ++i ) if(projs[i]->ready() && projs[i]->projtype == PRJ_SHOT && !projs[i]->limited && !projs[i]->child)
         {
             projent &proj = *projs[i];
             float trans = fadeweap(proj);
