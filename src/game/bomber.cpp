@@ -1,3 +1,4 @@
+#include <vector>
 #include <algorithm>
 using std::swap;
 #include "game.h"
@@ -9,14 +10,14 @@ namespace bomber
     {
         if(v && m_bb_hold(game::gamemode, game::mutators) && (!m_team(game::gamemode, game::mutators) || d->team != v->team))
         {
-            loopv(st.flags) if(isbomberaffinity(st.flags[i]) && st.flags[i].owner == v)
+            for( size_t i = 0; i < st.flags.size(); ++i ) if(isbomberaffinity(st.flags[i]) && st.flags[i].owner == v)
                 st.flags[i].taketime = lastmillis;
         }
     }
 
     bool carryaffinity(gameent *d)
     {
-        loopv(st.flags) if(st.flags[i].owner == d) return true;
+        for( size_t i = 0; i < st.flags.size(); ++i ) if(st.flags[i].owner == d) return true;
         return false;
     }
 
@@ -105,12 +106,12 @@ namespace bomber
 
     void drawblips(int w, int h, float blend)
     {
-        static vector<int> hasbombs; hasbombs.setsize(0);
-        loopv(st.flags) if(st.flags[i].owner == game::focus) hasbombs.add(i);
-        loopv(st.flags)
+        static std::vector<int> hasbombs; hasbombs.clear();
+        for( size_t i = 0; i < st.flags.size(); ++i ) if(st.flags[i].owner == game::focus) (hasbombs.emplace_back( i ), hasbombs.back());
+        for( size_t i = 0; i < st.flags.size(); ++i )
         {
             bomberstate::flag &f = st.flags[i];
-            if(hasbombs.find(i) >= 0 || !f.enabled) continue;
+            if(find( hasbombs, i ) >= 0 || !f.enabled) continue;
             vec pos = f.pos(true), colour = isbomberaffinity(f) ? pulsecolour() : vec::hexcolor(TEAM(f.team, colour));
             float area = 3, size = hud::radaraffinitysize;
             if(isbomberaffinity(f))
@@ -157,7 +158,7 @@ namespace bomber
                 else ty += draw_textf("Buffing: \fs\fo%d%%\fS damage, \fs\fg%d%%\fS shield", tx, ty, int(FONTW*hud::noticepadx), int(FONTH*hud::noticepady), tr, tg, tb, int(255*blend), TEXT_CENTERED, -1, -1, 1, int(bomberbuffdamage*100), int(bomberbuffshield*100));
                 popfont();
             }
-            loopv(st.flags)
+            for( size_t i = 0; i < st.flags.size(); ++i )
             {
                 bomberstate::flag &f = st.flags[i];
                 if(f.owner == game::focus)
@@ -193,7 +194,7 @@ namespace bomber
     {
         if(game::focus->state == CS_ALIVE && hud::showevents >= 2)
         {
-            loopv(st.flags)
+            for( size_t i = 0; i < st.flags.size(); ++i )
             {
                 bomberstate::flag &f = st.flags[i];
                 if(f.owner == game::focus)
@@ -208,9 +209,9 @@ namespace bomber
 
     int drawinventory(int x, int y, int s, int m, float blend)
     {
-        int sy = 0, numflags = st.flags.length(), estsize = numflags*s, fitsize = y-m, size = s;
+        int sy = 0, numflags = st.flags.size(), estsize = numflags*s, fitsize = y-m, size = s;
         if(estsize > fitsize) size = int((fitsize/float(estsize))*s);
-        loopv(st.flags) if(isbomberaffinity(st.flags[i]))
+        for( size_t i = 0; i < st.flags.size(); ++i ) if(isbomberaffinity(st.flags[i]))
         {
             if(y-sy-size < m) break;
             bomberstate::flag &f = st.flags[i];
@@ -283,10 +284,10 @@ namespace bomber
 
     void checkcams(vector<cament *> &cameras)
     {
-        loopv(st.flags) // flags/bases
+        for( size_t i = 0; i < st.flags.size(); ++i ) // flags/bases
         {
             bomberstate::flag &f = st.flags[i];
-            cament *c = cameras.add(new cament(cameras.length(), cament::AFFINITY, i));
+            cament *c = cameras.add(new cament(cameras.size(), cament::AFFINITY, i));
             c->o = f.pos(true);
             c->o.z += enttype[AFFINITY].radius/2;
             c->player = f.owner;
@@ -299,7 +300,7 @@ namespace bomber
         {
             case cament::AFFINITY:
             {
-                if(st.flags.inrange(c->id))
+                if(( 0 <= c->id && c->id < st.flags.size() ))
                 {
                     bomberstate::flag &f = st.flags[c->id];
                     c->o = f.pos(true);
@@ -316,7 +317,7 @@ namespace bomber
 
     void render()
     {
-        loopv(st.flags) // flags/bases
+        for( size_t i = 0; i < st.flags.size(); ++i ) // flags/bases
         {
             bomberstate::flag &f = st.flags[i];
             float trans = 1;
@@ -387,7 +388,7 @@ namespace bomber
 
     void adddynlights()
     {
-        loopv(st.flags)
+        for( size_t i = 0; i < st.flags.size(); ++i )
         {
             bomberstate::flag &f = st.flags[i];
             if(!f.enabled) continue;
@@ -406,7 +407,7 @@ namespace bomber
 
     void setup()
     {
-        loopv(entities::ents) if(entities::ents[i]->type == AFFINITY)
+        for( size_t i = 0; i < entities::ents.size(); ++i ) if(entities::ents[i]->type == AFFINITY)
         {
             gameentity &e = *(gameentity *)entities::ents[i];
             if(!m_check(e.attrs[3], e.attrs[4], game::gamemode, game::mutators) || !isteam(game::gamemode, game::mutators, e.attrs[0], T_NEUTRAL))
@@ -419,15 +420,15 @@ namespace bomber
                 default: continue; // remove
             }
             st.addaffinity(e.o, team, e.attrs[1], e.attrs[2]);
-            if(st.flags.length() >= MAXPARAMS) break;
+            if(st.flags.size() >= MAXPARAMS) break;
         }
     }
 
     void sendaffinity(packetbuf &p)
     {
         putint(p, N_INITAFFIN);
-        putint(p, st.flags.length());
-        loopv(st.flags)
+        putint(p, st.flags.size());
+        for( size_t i = 0; i < st.flags.size(); ++i )
         {
             bomberstate::flag &f = st.flags[i];
             putint(p, f.team);
@@ -445,7 +446,7 @@ namespace bomber
     void parseaffinity(ucharbuf &p)
     {
         int numflags = getint(p);
-        while(st.flags.length() > numflags) st.flags.pop();
+        while(st.flags.size() > numflags) (st.flags.back(),st.flags.pop_back());
         loopi(numflags)
         {
             int team = getint(p), yaw = getint(p), pitch = getint(p), enabled = getint(p), owner = getint(p), dropped = 0, target = -1;
@@ -463,7 +464,7 @@ namespace bomber
             }
             if(p.overread()) break;
             if(i >= MAXPARAMS) continue;
-            while(!st.flags.inrange(i)) st.flags.add();
+            while(!( 0 <= i && i < st.flags.size() )) (st.flags.emplace_back(  ), st.flags.back());
             bomberstate::flag &f = st.flags[i];
             f.reset();
             f.team = team;
@@ -481,13 +482,13 @@ namespace bomber
 
     void dropaffinity(gameent *d, int i, const vec &droploc, const vec &inertia, int target)
     {
-        if(!st.flags.inrange(i)) return;
+        if(!( 0 <= i && i < st.flags.size() )) return;
         st.dropaffinity(i, droploc, inertia, lastmillis, target);
     }
 
     void removeplayer(gameent *d)
     {
-        loopv(st.flags) if(st.flags[i].owner == d)
+        for( size_t i = 0; i < st.flags.size(); ++i ) if(st.flags[i].owner == d)
         {
             bomberstate::flag &f = st.flags[i];
             st.dropaffinity(i, f.owner->feetpos(bomberdropheight), f.owner->vel, lastmillis);
@@ -533,7 +534,7 @@ namespace bomber
 
     void resetaffinity(int i, int value, const vec &pos)
     {
-        if(!st.flags.inrange(i)) return;
+        if(!( 0 <= i && i < st.flags.size() )) return;
         bomberstate::flag &f = st.flags[i];
         if(f.enabled && !value)
         {
@@ -551,7 +552,7 @@ namespace bomber
     VAR(IDF_PERSIST, showbomberdists, 0, 2, 2); // 0 = off, 1 = self only, 2 = all
     void scoreaffinity(gameent *d, int relay, int goal, int score)
     {
-        if(!st.flags.inrange(relay) || !st.flags.inrange(goal)) return;
+        if(!( 0 <= relay && relay < st.flags.size() ) || !( 0 <= goal && goal < st.flags.size() )) return;
         bomberstate::flag &f = st.flags[relay], &g = st.flags[goal];
         string extra = "";
         if(m_bb_basket(game::gamemode, game::mutators) && showbomberdists >= (d != game::player1 ? 2 : 1))
@@ -569,7 +570,7 @@ namespace bomber
 
     void takeaffinity(gameent *d, int i)
     {
-        if(!st.flags.inrange(i)) return;
+        if(!( 0 <= i && i < st.flags.size() )) return;
         bomberstate::flag &f = st.flags[i];
         playsound(S_CATCH, d->o, d);
         if(!f.droptime)
@@ -578,7 +579,7 @@ namespace bomber
             game::announcef(S_V_BOMBPICKUP, CON_SELF, d, true, "\fa%s picked up the \fs\fzwv\f($bombtex)bomb\fS", game::colourname(d));
         }
         st.takeaffinity(i, d, lastmillis);
-        if(d->ai) aihomerun(d, d->ai->state.last());
+        if(d->ai) aihomerun(d, d->ai->state.back());
     }
 
     void checkaffinity(gameent *d, int i)
@@ -617,7 +618,7 @@ namespace bomber
         gameent *d = NULL;
         int numdyn = game::numdynents();
         loopj(numdyn) if(((d = (gameent *)game::iterdynents(j))) && d->state == CS_ALIVE && (d == game::player1 || d->ai)) dropaffinity(d);
-        loopv(st.flags)
+        for( size_t i = 0; i < st.flags.size(); ++i )
         {
             bomberstate::flag &f = st.flags[i];
             if(!f.enabled || !isbomberaffinity(f)) continue;
@@ -643,13 +644,13 @@ namespace bomber
         {
             int goal = -1;
             vec pos = d->feetpos();
-            loopv(st.flags)
+            for( size_t i = 0; i < st.flags.size(); ++i )
             {
                 bomberstate::flag &g = st.flags[i];
                 if(isbombertarg(g, d->team) && (goal < 0 || g.pos().squaredist(pos) < st.flags[goal].pos().squaredist(pos)))
                     goal = i;
             }
-            if(st.flags.inrange(goal) && ai::makeroute(d, b, st.flags[goal].pos()))
+            if(( 0 <= goal && goal < st.flags.size() ) && ai::makeroute(d, b, st.flags[goal].pos()))
             {
                 d->ai->switchstate(b, ai::AI_S_PURSUE, ai::AI_T_AFFINITY, goal, ai::AI_A_HASTE);
                 return true;
@@ -668,22 +669,22 @@ namespace bomber
     {
         if(d->actortype == A_BOT)
         {
-            static vector<int> taken; taken.setsize(0);
-            loopv(st.flags)
+            static std::vector<int> taken; taken.clear();
+            for( size_t i = 0; i < st.flags.size(); ++i )
             {
                 bomberstate::flag &g = st.flags[i];
                 if(g.owner == d) return aihomerun(d, b);
-                else if((g.owner && g.owner->team != d->team) || g.droptime) taken.add(i);
+                else if((g.owner && g.owner->team != d->team) || g.droptime) (taken.emplace_back( i ), taken.back());
             }
             if(!ai::badhealth(d)) while(!taken.empty())
             {
-                int flag = taken.length() > 2 ? rnd(taken.length()) : 0;
+                int flag = taken.size() > 2 ? rnd(taken.size()) : 0;
                 if(ai::makeroute(d, b, st.flags[taken[flag]].pos()))
                 {
                     d->ai->switchstate(b, ai::AI_S_PURSUE, ai::AI_T_AFFINITY, taken[flag], ai::AI_A_HASTE);
                     return true;
                 }
-                else taken.remove(flag);
+                else taken.erase( taken.begin() + flag );
             }
         }
         return false;
@@ -692,14 +693,14 @@ namespace bomber
     void aifind(gameent *d, ai::aistate &b, vector<ai::interest> &interests)
     {
         vec pos = d->feetpos();
-        loopvj(st.flags)
+        for( size_t j = 0; j < st.flags.size(); ++j )
         {
             bomberstate::flag &f = st.flags[j];
             if(!f.enabled) continue;
             bool home = isbomberhome(f, d->team) || isbombertarg(f, d->team);
             if(d->actortype == A_BOT && m_duke(game::gamemode, game::mutators) && home) continue;
             static vector<int> targets; // build a list of others who are interested in this
-            targets.setsize(0);
+            targets.clear();
             bool regen = d->actortype != A_BOT || f.team != d->team || !m_regen(game::gamemode, game::mutators) || d->health >= m_health(game::gamemode, game::mutators, d->actortype);
             ai::checkothers(targets, d, home || d->actortype != A_BOT ? ai::AI_S_DEFEND : ai::AI_S_PURSUE, ai::AI_T_AFFINITY, j, true);
             if(d->actortype == A_BOT)
@@ -709,8 +710,8 @@ namespace bomber
                 float mindist = enttype[AFFINITY].radius*4; mindist *= mindist;
                 loopi(numdyns) if((e = (gameent *)game::iterdynents(i)) && !e->ai && e->state == CS_ALIVE && d->team == e->team)
                 {
-                    if(targets.find(e->clientnum) < 0 && (f.owner == e || e->feetpos().squaredist(f.pos()) <= mindist))
-                        targets.add(e->clientnum);
+                    if(find( targets, e->clientnum ) < 0 && (f.owner == e || e->feetpos().squaredist(f.pos()) <= mindist))
+                        (targets.emplace_back( e->clientnum ), targets.back());
                 }
             }
             if(home)
@@ -720,7 +721,7 @@ namespace bomber
                 else if(d->hasweap(ai::weappref(d), m_weapon(d->actortype, game::gamemode, game::mutators)))
                 { // see if we can relieve someone who only has a piece of crap
                     gameent *t;
-                    loopvk(targets) if((t = game::getclient(targets[k])))
+                    for( size_t k = 0; k < targets.size(); ++k ) if((t = game::getclient(targets[k])))
                     {
                         if((t->ai && !t->hasweap(ai::weappref(t), m_weapon(t->actortype, game::gamemode, game::mutators))) || (!t->ai && t->weapselect < W_OFFSET))
                         {
@@ -731,7 +732,7 @@ namespace bomber
                 }
                 if(guard)
                 { // defend the flag
-                    ai::interest &n = interests.add();
+                    ai::interest &n = (interests.emplace_back(  ), interests.back());
                     n.state = ai::AI_S_DEFEND;
                     n.node = ai::closestwaypoint(f.pos(), ai::CLOSEDIST, true);
                     n.target = j;
@@ -746,7 +747,7 @@ namespace bomber
             {
                 if(targets.empty())
                 { // attack the flag
-                    ai::interest &n = interests.add();
+                    ai::interest &n = (interests.emplace_back(  ), interests.back());
                     n.state = d->actortype == A_BOT ? ai::AI_S_PURSUE : ai::AI_S_DEFEND;
                     n.node = ai::closestwaypoint(f.pos(), ai::CLOSEDIST, true);
                     n.target = j;
@@ -758,9 +759,9 @@ namespace bomber
                 else
                 { // help by defending the attacker
                     gameent *t;
-                    loopvk(targets) if((t = game::getclient(targets[k])))
+                    for( size_t k = 0; k < targets.size(); ++k ) if((t = game::getclient(targets[k])))
                     {
-                        ai::interest &n = interests.add();
+                        ai::interest &n = (interests.emplace_back(  ), interests.back());
                         bool team = d->team == t->team;
                         if(d->actortype == A_BOT && m_duke(game::gamemode, game::mutators) && team) continue;
                         n.state = team ? ai::AI_S_DEFEND : ai::AI_S_PURSUE;
@@ -781,10 +782,10 @@ namespace bomber
     {
         if(d->actortype == A_BOT)
         {
-            loopv(st.flags) if(st.flags[i].owner == d) return aihomerun(d, b);
+            for( size_t i = 0; i < st.flags.size(); ++i ) if(st.flags[i].owner == d) return aihomerun(d, b);
             if(m_duke(game::gamemode, game::mutators) && b.owner < 0) return false;
         }
-        if(st.flags.inrange(b.target))
+        if(( 0 <= b.target && b.target < st.flags.size() ))
         {
             bomberstate::flag &f = st.flags[b.target];
             if(isbomberaffinity(f) && f.owner && d->team != f.owner->team && ai::violence(d, b, f.owner, 4)) return true;
@@ -796,15 +797,15 @@ namespace bomber
                     if(b.owner < 0)
                     {
                         static vector<int> targets; // build a list of others who are interested in this
-                        targets.setsize(0);
+                        targets.clear();
                         ai::checkothers(targets, d, ai::AI_S_DEFEND, ai::AI_T_AFFINITY, b.target, true);
                         gameent *e = NULL;
                         int numdyns = game::numdynents();
                         float mindist = enttype[AFFINITY].radius*4; mindist *= mindist;
                         loopi(numdyns) if((e = (gameent *)game::iterdynents(i)) && !e->ai && e->state == CS_ALIVE && d->team == e->team)
                         {
-                            if(targets.find(e->clientnum) < 0 && (f.owner == e || e->feetpos().squaredist(f.pos()) <= mindist))
-                                targets.add(e->clientnum);
+                            if(find( targets, e->clientnum ) < 0 && (f.owner == e || e->feetpos().squaredist(f.pos()) <= mindist))
+                                (targets.emplace_back( e->clientnum ), targets.back());
                         }
                         if(!targets.empty())
                         {
@@ -831,7 +832,7 @@ namespace bomber
 
     bool aipursue(gameent *d, ai::aistate &b)
     {
-        if(st.flags.inrange(b.target) && d->actortype == A_BOT)
+        if(( 0 <= b.target && b.target < st.flags.size() ) && d->actortype == A_BOT)
         {
             bomberstate::flag &f = st.flags[b.target];
             if(!f.enabled) return false;
@@ -847,7 +848,7 @@ namespace bomber
             }
             if(isbombertarg(f, d->team))
             {
-                loopv(st.flags) if(st.flags[i].owner == d && ai::makeroute(d, b, f.pos()))
+                for( size_t i = 0; i < st.flags.size(); ++i ) if(st.flags[i].owner == d && ai::makeroute(d, b, f.pos()))
                 {
                     b.acttype = ai::AI_A_HASTE;
                     return true;
