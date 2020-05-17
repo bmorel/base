@@ -1,3 +1,4 @@
+#include <vector>
 #include <algorithm>
 using std::swap;
 
@@ -43,7 +44,7 @@ struct grassvert
     vec2 tc, lm;
 };
 
-static vector<grassvert> grassverts;
+static std::vector<grassvert> grassverts;
 static GLuint grassvbo = 0;
 static int grassvbosize = 0;
 
@@ -54,7 +55,7 @@ struct grassgroup
     int tex, lmtex, offset, numquads, scale, height;
 };
 
-static vector<grassgroup> grassgroups;
+static std::vector<grassgroup> grassgroups;
 
 float *grassoffsets = NULL, *grassanimoffsets = NULL;
 void resetgrassoffsets(int n)
@@ -186,13 +187,13 @@ static void gengrassquads(grassgroup *&group, const grasswedge &w, const grasstr
 
         if(!group)
         {
-            group = &grassgroups.add();
+            group = &(grassgroups.emplace_back(  ), grassgroups.back());
             group->tri = &g;
             group->tex = tex->id;
             extern bool brightengeom;
             int lmid = brightengeom && (g.lmid < LMID_RESERVED || (fullbright && editmode)) ? LMID_BRIGHT : g.lmid;
-            group->lmtex = lightmaptexs.inrange(lmid) ? lightmaptexs[lmid].id : notexture->id;
-            group->offset = grassverts.length()/4;
+            group->lmtex = ( 0 <= lmid && lmid < lightmaptexs.size() ) ? lightmaptexs[lmid].id : notexture->id;
+            group->offset = grassverts.size()/4;
             group->numquads = 0;
             group->scale = gs;
             group->height = gh;
@@ -211,7 +212,7 @@ static void gengrassquads(grassgroup *&group, const grasswedge &w, const grasstr
         bvec4 color(gcol, uchar(fade*blend*255));
 
         #define GRASSVERT(n, tcv, modify) { \
-            grassvert &gv = grassverts.add(); \
+            grassvert &gv = (grassverts.emplace_back(  ), grassverts.back()); \
             gv.pos = p##n; \
             gv.color = color; \
             gv.tc = vec2(tc##n, tcv); \
@@ -228,7 +229,7 @@ static void gengrassquads(grassgroup *&group, const grasswedge &w, const grasstr
 
 static void gengrassquads(vtxarray *va)
 {
-    loopv(va->grasstris)
+    for( size_t i = 0; i < va->grasstris.size(); ++i )
     {
         grasstri &g = va->grasstris[i];
         if(isfoggedsphere(g.radius, g.center)) continue;
@@ -264,8 +265,8 @@ void generategrass()
 
     initgrass();
 
-    grassgroups.setsize(0);
-    grassverts.setsize(0);
+    grassgroups.clear();
+    grassverts.clear();
 
     loopi(numgrasswedges)
     {
@@ -284,14 +285,14 @@ void generategrass()
 
     if(grassgroups.empty()) return;
 
-    grassgroups.sort(comparegrassgroups);
+    std::sort( grassgroups.begin(), grassgroups.end(), comparegrassgroups );
 
     if(!grassvbo) glGenBuffers_(1, &grassvbo);
     gle::bindvbo(grassvbo);
-    int size = grassverts.length()*sizeof(grassvert);
+    int size = grassverts.size()*sizeof(grassvert);
     grassvbosize = max(grassvbosize, size);
-    glBufferData_(GL_ARRAY_BUFFER, grassvbosize, size == grassvbosize ? grassverts.getbuf() : NULL, GL_STREAM_DRAW);
-    if(size != grassvbosize) glBufferSubData_(GL_ARRAY_BUFFER, 0, size, grassverts.getbuf());
+    glBufferData_(GL_ARRAY_BUFFER, grassvbosize, size == grassvbosize ? grassverts.data() : NULL, GL_STREAM_DRAW);
+    if(size != grassvbosize) glBufferSubData_(GL_ARRAY_BUFFER, 0, size, grassverts.data());
     gle::clearvbo();
 }
 
@@ -320,7 +321,7 @@ void rendergrass()
     gle::enablequads();
 
     int texid = -1, lmtexid = -1;
-    loopv(grassgroups)
+    for( size_t i = 0; i < grassgroups.size(); ++i )
     {
         grassgroup &g = grassgroups[i];
 
