@@ -1,3 +1,4 @@
+#include <vector>
 // serverbrowser.cpp: eihrul's concurrent resolver, and server browser window management
 #include <algorithm>
 using std::swap;
@@ -39,7 +40,7 @@ int resolverloop(void * data)
     {
         SDL_LockMutex(resolvermutex);
         while(resolverqueries.empty()) SDL_CondWait(querycond, resolvermutex);
-        rt->query = resolverqueries.pop();
+        rt->query = resolverqueries.back();resolverqueries.pop_back();
         rt->starttime = totalmillis;
         SDL_UnlockMutex(resolvermutex);
 
@@ -49,7 +50,7 @@ int resolverloop(void * data)
         SDL_LockMutex(resolvermutex);
         if(rt->query && thread == rt->thread)
         {
-            resolverresult &rr = resolverresults.add();
+            resolverresult &rr = (resolverresults.emplace_back(  ), resolverresults.back());
             rr.query = rt->query;
             rr.address = address;
             rt->query = NULL;
@@ -70,7 +71,7 @@ void resolverinit()
     SDL_LockMutex(resolvermutex);
     loopi(RESOLVERTHREADS)
     {
-        resolverthread &rt = resolverthreads.add();
+        resolverthread &rt = (resolverthreads.emplace_back(  ), resolverthreads.back());
         rt.query = NULL;
         rt.starttime = 0;
         rt.thread = SDL_CreateThread(resolverloop, "resolver", &rt);
@@ -98,9 +99,9 @@ void resolverclear()
     if(resolverthreads.empty()) return;
 
     SDL_LockMutex(resolvermutex);
-    resolverqueries.shrink(0);
-    resolverresults.shrink(0);
-    loopv(resolverthreads)
+    resolverqueries.clear();
+    resolverresults.clear();
+    for( size_t i = 0; i < resolverthreads.size(); ++i )
     {
         resolverthread &rt = resolverthreads[i];
         resolverstop(rt);
@@ -113,7 +114,7 @@ void resolverquery(const char *name)
     if(resolverthreads.empty()) resolverinit();
 
     SDL_LockMutex(resolvermutex);
-    resolverqueries.add(name);
+    (resolverqueries.emplace_back( name ), resolverqueries.back());
     SDL_CondSignal(querycond);
     SDL_UnlockMutex(resolvermutex);
 }
@@ -124,12 +125,12 @@ bool resolvercheck(const char **name, ENetAddress *address)
     SDL_LockMutex(resolvermutex);
     if(!resolverresults.empty())
     {
-        resolverresult &rr = resolverresults.pop();
+        resolverresult &rr = resolverresults.back();resolverresults.pop_back();
         *name = rr.query;
         address->host = rr.address.host;
         resolved = true;
     }
-    else loopv(resolverthreads)
+    else for( size_t i = 0; i < resolverthreads.size(); ++i )
     {
         resolverthread &rt = resolverthreads[i];
         if(rt.query && totalmillis - rt.starttime > RESOLVERLIMIT)
@@ -151,17 +152,17 @@ bool resolverwait(const char *name, ENetAddress *address)
     progress(0, text);
 
     SDL_LockMutex(resolvermutex);
-    resolverqueries.add(name);
+    (resolverqueries.emplace_back( name ), resolverqueries.back());
     SDL_CondSignal(querycond);
     int starttime = SDL_GetTicks(), timeout = 0;
     bool resolved = false;
     for(;;)
     {
         SDL_CondWaitTimeout(resultcond, resolvermutex, 250);
-        loopv(resolverresults) if(resolverresults[i].query == name)
+        for( size_t i = 0; i < resolverresults.size(); ++i ) if(resolverresults[i].query == name)
         {
             address->host = resolverresults[i].address.host;
-            resolverresults.remove(i);
+            resolverresults.erase( resolverresults.begin() + i );
             resolved = true;
             break;
         }
@@ -174,7 +175,7 @@ bool resolverwait(const char *name, ENetAddress *address)
     }
     if(!resolved && timeout > RESOLVERLIMIT)
     {
-        loopv(resolverthreads)
+        for( size_t i = 0; i < resolverthreads.size(); ++i )
         {
             resolverthread &rt = resolverthreads[i];
             if(rt.query == name) { resolverstop(rt); break; }
@@ -237,7 +238,7 @@ static serverinfo *newserver(const char *name, int port = SERVER_PORT, int prior
     if(flags && *flags) copystring(si->flags, flags);
     if(branch && *branch) copystring(si->branch, branch, MAXBRANCHLEN+1);
 
-    servers.add(si);
+    (servers.emplace_back( si ), servers.back());
     sortedservers = false;
 
     return si;
@@ -245,7 +246,7 @@ static serverinfo *newserver(const char *name, int port = SERVER_PORT, int prior
 
 void addserver(const char *name, int port, int priority, const char *desc, const char *handle, const char *flags, const char *branch)
 {
-    loopv(servers) if(!strcmp(servers[i]->name, name) && servers[i]->port == port) return;
+    for( size_t i = 0; i < servers.size(); ++i ) if(!strcmp(servers[i]->name, name) && servers[i]->port == port) return;
     if(newserver(name, port, priority, desc, handle, flags, branch) && verbose >= 2)
         conoutf("added server %s (%d) [%s]", name, port, desc);
 }
@@ -276,14 +277,14 @@ void pingservers()
     putint(p, totalmillis ? totalmillis : 1);
 
     static int lastping = 0;
-    if(lastping >= servers.length()) lastping = 0;
-    loopi(maxservpings ? min(servers.length(), maxservpings) : servers.length())
+    if(lastping >= servers.size()) lastping = 0;
+    loopi(maxservpings ? min(servers.size(), maxservpings) : servers.size())
     {
         serverinfo &si = *servers[lastping];
-        if(++lastping >= servers.length()) lastping = 0;
+        if(++lastping >= servers.size()) lastping = 0;
         if(si.address.host == ENET_HOST_ANY) continue;
         buf.data = ping;
-        buf.dataLength = p.length();
+        buf.dataLength = p.size();
         enet_socket_send(pingsock, &si.address, &buf, 1);
 
         si.checkdecay(serverdecay*1000);
@@ -295,7 +296,7 @@ void pingservers()
         address.host = ENET_HOST_BROADCAST;
         address.port = serverlanport;
         buf.data = ping;
-        buf.dataLength = p.length();
+        buf.dataLength = p.size();
         enet_socket_send(pingsock, &address, &buf, 1);
     }
     lastinfo = totalmillis;
@@ -304,7 +305,7 @@ void pingservers()
 void checkresolver()
 {
     int resolving = 0;
-    loopv(servers)
+    for( size_t i = 0; i < servers.size(); ++i )
     {
         serverinfo &si = *servers[i];
         if(si.resolved == serverinfo::RESOLVED) continue;
@@ -321,7 +322,7 @@ void checkresolver()
     {
         ENetAddress addr = { ENET_HOST_ANY, ENET_PORT_ANY };
         if(!resolvercheck(&name, &addr)) break;
-        loopv(servers)
+        for( size_t i = 0; i < servers.size(); ++i )
         {
             serverinfo &si = *servers[i];
             if(name == si.name)
@@ -351,7 +352,7 @@ void checkpings()
         int len = enet_socket_receive(pingsock, &addr, &buf, 1);
         if(len <= 0) return;
         serverinfo *si = NULL;
-        loopv(servers) if(addr.host == servers[i]->address.host && addr.port == servers[i]->address.port) { si = servers[i]; break; }
+        for( size_t i = 0; i < servers.size(); ++i ) if(addr.host == servers[i]->address.host && addr.port == servers[i]->address.port) { si = servers[i]; break; }
         if(!si && searchlan) si = newserver(NULL, addr.port-1, 1, NULL, NULL, NULL, NULL, addr.host);
         if(!si) continue;
         ucharbuf p(ping, len);
@@ -360,15 +361,15 @@ void checkpings()
         si->lastinfo = totalmillis;
         si->numplayers = getint(p);
         int numattr = getint(p);
-        si->attr.shrink(0);
+        si->attr.clear();
         loopj(numattr) si->attr.add(getint(p));
         int gver = si->attr.empty() ? 0 : si->attr[0];
         getstring(text, p);
         filterstring(si->map, text, false);
         getstring(text, p);
         filterstring(si->sdesc, text, true, true, true, false, MAXSDESCLEN+1);
-        si->players.deletearrays();
-        si->handles.deletearrays();
+        si->players.clear();
+        si->handles.clear();
         if(gver >= 227)
         {
             getstring(text, p);
@@ -398,7 +399,7 @@ void refreshservers()
     if(lastrefresh == totalmillis) return;
     if(totalmillis - lastrefresh > 1000)
     {
-        loopv(servers) servers[i]->reset();
+        for( size_t i = 0; i < servers.size(); ++i ) servers[i]->reset();
         sortedservers = false;
         lastreset = totalmillis;
     }
@@ -406,7 +407,7 @@ void refreshservers()
 
     checkresolver();
     checkpings();
-    if(totalmillis - lastinfo >= (serverupdateinterval*1000)/(maxservpings ? max(1, (servers.length() + maxservpings - 1) / maxservpings) : 1)) pingservers();
+    if(totalmillis - lastinfo >= (serverupdateinterval*1000)/(maxservpings ? max(1, (servers.size() + maxservpings - 1) / maxservpings) : 1)) pingservers();
 }
 
 bool reqmaster = false;
@@ -414,7 +415,7 @@ bool reqmaster = false;
 void clearservers()
 {
     resolverclear();
-    servers.deletecontents();
+    servers.clear();
     lastinfo = 0;
 }
 
@@ -458,9 +459,9 @@ void retrieveservers(vector<char> &data)
         enet_uint32 events = ENET_SOCKET_WAIT_RECEIVE;
         if(enet_socket_wait(sock, &events, 250) >= 0 && events)
         {
-            if(data.length() >= data.capacity()) data.reserve(4096);
-            buf.data = data.getbuf() + data.length();
-            buf.dataLength = data.capacity() - data.length();
+            if(data.size() >= data.capacity()) data.resize( data.size() + 4096 );
+            buf.data = data.data() + data.size();
+            buf.dataLength = data.capacity() - data.size();
             int recv = enet_socket_receive(sock, NULL, &buf, 1);
             if(recv <= 0) break;
             data.advance(recv);
@@ -471,7 +472,7 @@ void retrieveservers(vector<char> &data)
         if(timeout > RETRIEVELIMIT) break;
     }
 
-    if(data.length()) data.add('\0');
+    if(data.size()) (data.emplace_back( '\0' ), data.back());
     enet_socket_destroy(sock);
 }
 
@@ -479,7 +480,7 @@ void sortservers()
 {
     if(!sortedservers)
     {
-        servers.sort(serverinfocompare);
+        std::sort( servers.begin(), servers.end(), serverinfocompare );
         sortedservers = true;
     }
 }
@@ -493,12 +494,12 @@ void updatefrommaster()
     pausesortservers = 0;
     vector<char> data;
     retrieveservers(data);
-    if(data.length() && data[0])
+    if(data.size() && data[0])
     {
         //clearservers();
-        execute(data.getbuf());
-        if(verbose) conoutf("\faretrieved %d server(s) from master", servers.length());
-        else conoutf("\faretrieved list from master successfully");//, servers.length());
+        execute(data.data());
+        if(verbose) conoutf("\faretrieved %d server(s) from master", servers.size());
+        else conoutf("\faretrieved list from master successfully");//, servers.size());
     }
     else conoutf("master server not replying");
     refreshservers();
@@ -511,7 +512,7 @@ void updateservers()
     if(!reqmaster) updatefrommaster();
     refreshservers();
     if(autosortservers && !pausesortservers) sortservers();
-    intret(servers.length());
+    intret(servers.size());
 }
 COMMAND(0, updateservers, "");
 
@@ -521,7 +522,7 @@ void writeservercfg()
     stream *f = openutf8file("servers.cfg", "w");
     if(!f) return;
     f->printf("// servers which are connected to or queried get added here automatically\n\n");
-    loopv(servers)
+    for( size_t i = 0; i < servers.size(); ++i )
     {
         serverinfo *s = servers[i];
         f->printf("addserver %s %d %d %s %s %s %s\n", s->name, s->port, s->priority, escapestring(s->sdesc[0] ? s->sdesc : s->name), escapestring(s->authhandle), escapestring(s->flags), escapestring(s->branch));
