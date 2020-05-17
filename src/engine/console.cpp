@@ -1,4 +1,6 @@
 // console.cpp: the console buffer, its display, and command line control
+#include <vector>
+#include <string>
 #include <algorithm>
 using std::swap;
 
@@ -142,7 +144,7 @@ void searchbindlist(const char *action, int type, int limit, const char *s1, con
             if(s2 && *s2) names.put(s2, strlen(s2));
         }
     }
-    names.add('\0');
+    (names.emplace_back( '\0' ), names.back());
 }
 
 const char *searchbind(const char *action, int type)
@@ -215,7 +217,7 @@ void getkeypressed(int limit, const char *s1, const char *s2, const char *sep1, 
             if(s2 && *s2) names.put(s2, strlen(s2));
         }
     }
-    names.add('\0');
+    (names.emplace_back( '\0' ), names.back());
 }
 
 int findkeycode(char *key)
@@ -269,12 +271,12 @@ ICOMMAND(0, getbind,     "s", (char *key), getbind(key, keym::ACTION_DEFAULT));
 ICOMMAND(0, getspecbind, "s", (char *key), getbind(key, keym::ACTION_SPECTATOR));
 ICOMMAND(0, geteditbind, "s", (char *key), getbind(key, keym::ACTION_EDITING));
 ICOMMAND(0, getwaitbind, "s", (char *key), getbind(key, keym::ACTION_WAITING));
-ICOMMAND(0, searchbinds,     "sissssb", (char *action, int *limit, char *s1, char *s2, char *sep1, char *sep2, int *force), { vector<char> list; searchbindlist(action, keym::ACTION_DEFAULT, max(*limit, 0), s1, s2, sep1, sep2, list, *force!=0); result(list.getbuf()); });
-ICOMMAND(0, searchspecbinds, "sissssb", (char *action, int *limit, char *s1, char *s2, char *sep1, char *sep2, int *force), { vector<char> list; searchbindlist(action, keym::ACTION_SPECTATOR, max(*limit, 0), s1, s2, sep1, sep2, list, *force!=0); result(list.getbuf()); });
-ICOMMAND(0, searcheditbinds, "sissssb", (char *action, int *limit, char *s1, char *s2, char *sep1, char *sep2, int *force), { vector<char> list; searchbindlist(action, keym::ACTION_EDITING, max(*limit, 0), s1, s2, sep1, sep2, list, *force!=0); result(list.getbuf()); });
-ICOMMAND(0, searchwaitbinds, "sissssb", (char *action, int *limit, char *s1, char *s2, char *sep1, char *sep2, int *force), { vector<char> list; searchbindlist(action, keym::ACTION_WAITING, max(*limit, 0), s1, s2, sep1, sep2, list, *force!=0); result(list.getbuf()); });
+ICOMMAND(0, searchbinds,     "sissssb", (char *action, int *limit, char *s1, char *s2, char *sep1, char *sep2, int *force), { vector<char> list; searchbindlist(action, keym::ACTION_DEFAULT, max(*limit, 0), s1, s2, sep1, sep2, list, *force!=0); result(list.data()); });
+ICOMMAND(0, searchspecbinds, "sissssb", (char *action, int *limit, char *s1, char *s2, char *sep1, char *sep2, int *force), { vector<char> list; searchbindlist(action, keym::ACTION_SPECTATOR, max(*limit, 0), s1, s2, sep1, sep2, list, *force!=0); result(list.data()); });
+ICOMMAND(0, searcheditbinds, "sissssb", (char *action, int *limit, char *s1, char *s2, char *sep1, char *sep2, int *force), { vector<char> list; searchbindlist(action, keym::ACTION_EDITING, max(*limit, 0), s1, s2, sep1, sep2, list, *force!=0); result(list.data()); });
+ICOMMAND(0, searchwaitbinds, "sissssb", (char *action, int *limit, char *s1, char *s2, char *sep1, char *sep2, int *force), { vector<char> list; searchbindlist(action, keym::ACTION_WAITING, max(*limit, 0), s1, s2, sep1, sep2, list, *force!=0); result(list.data()); });
 
-ICOMMAND(0, keyspressed, "issss", (int *limit, char *s1, char *s2, char *sep1, char *sep2), { vector<char> list; getkeypressed(max(*limit, 0), s1, s2, sep1, sep2, list); result(list.getbuf()); });
+ICOMMAND(0, keyspressed, "issss", (int *limit, char *s1, char *s2, char *sep1, char *sep2), { vector<char> list; getkeypressed(max(*limit, 0), s1, s2, sep1, sep2, list); result(list.data()); });
 
 void inputcommand(char *init, char *action = NULL, char *icon = NULL, int colour = 0, char *flags = NULL) // turns input to the command line on or off
 {
@@ -371,7 +373,7 @@ struct hline
         else client::toserver(0, buf);
     }
 };
-vector<hline *> history;
+std::vector<hline *> history;
 int histpos = 0;
 
 VAR(IDF_PERSIST, maxhistory, 0, 1000, 10000);
@@ -379,10 +381,10 @@ VAR(IDF_PERSIST, maxhistory, 0, 1000, 10000);
 void history_(int *n)
 {
     static bool inhistory = false;
-    if(!inhistory && history.inrange(*n))
+    if(!inhistory && ( 0 <= *n && *n < history.size() ))
     {
         inhistory = true;
-        history[history.length()-*n-1]->run();
+        history[history.size()-*n-1]->run();
         inhistory = false;
     }
 }
@@ -394,12 +396,12 @@ struct releaseaction
     keym *key;
     char *action;
 };
-vector<releaseaction> releaseactions;
+std::vector<releaseaction> releaseactions;
 
 const char *addreleaseaction(char *s)
 {
     if(!keypressed) { delete[] s; return NULL; }
-    releaseaction &ra = releaseactions.add();
+    releaseaction &ra = (releaseactions.emplace_back(  ), releaseactions.back());
     ra.key = keypressed;
     ra.action = s;
     return keypressed->name;
@@ -414,14 +416,14 @@ COMMAND(0, onrelease, "s");
 
 void execbind(keym &k, bool isdown)
 {
-    loopv(releaseactions)
+    for( size_t i = 0; i < releaseactions.size(); ++i )
     {
         releaseaction &ra = releaseactions[i];
         if(ra.key==&k)
         {
             if(!isdown) execute(ra.action);
             delete[] ra.action;
-            releaseactions.remove(i--);
+            releaseactions.erase( releaseactions.begin() + i-- );
         }
     }
     if(isdown)
@@ -522,12 +524,12 @@ bool consolekey(int code, bool isdown)
                 break;
 
             case SDLK_UP:
-                if(histpos > history.length()) histpos = history.length();
+                if(histpos > history.size()) histpos = history.size();
                 if(histpos > 0) history[--histpos]->restore();
                 break;
 
             case SDLK_DOWN:
-                if(histpos + 1 < history.length()) history[++histpos]->restore();
+                if(histpos + 1 < history.size()) history[++histpos]->restore();
                 break;
 
             case SDLK_TAB:
@@ -550,18 +552,18 @@ bool consolekey(int code, bool isdown)
             hline *h = NULL;
             if(commandbuf[0])
             {
-                if(history.empty() || history.last()->shouldsave())
+                if(history.empty() || history.back()->shouldsave())
                 {
-                    if(maxhistory && history.length() >= maxhistory)
+                    if(maxhistory && history.size() >= maxhistory)
                     {
-                        loopi(history.length()-maxhistory+1) delete history[i];
-                        history.remove(0, history.length()-maxhistory+1);
+                        loopi(history.size()-maxhistory+1) delete history[i];
+                        history.erase( history.begin(), history.begin() + history.size()-maxhistory+1 );
                     }
-                    history.add(h = new hline)->save();
+                    (history.emplace_back( h = new hline ), history.back())->save();
                 }
-                else h = history.last();
+                else h = history.back();
             }
-            histpos = history.length();
+            histpos = history.size();
             inputcommand(NULL);
             if(h)
             {
@@ -572,7 +574,7 @@ bool consolekey(int code, bool isdown)
         }
         else if(code==SDLK_ESCAPE || code < 0)
         {
-            histpos = history.length();
+            histpos = history.size();
             inputcommand(NULL);
         }
     }
@@ -649,13 +651,13 @@ void clear_console()
 void writebinds(stream *f)
 {
     static const char * const cmds[4] = { "bind", "specbind", "editbind", "waitbind" };
-    vector<keym *> binds;
-    enumerate(keyms, keym, km, binds.add(&km));
-    binds.sortname();
+    std::vector<keym *> binds;
+    enumerate(keyms, keym, km, (binds.emplace_back( &km ), binds.back()));
+    std::sort( binds.begin(), binds.end(), sortnameless() );
     loopj(4)
     {
         bool found = false;
-        loopv(binds)
+        for( size_t i = 0; i < binds.size(); ++i )
         {
             keym &km = *binds[i];
             if(km.persist[j])
@@ -687,19 +689,29 @@ struct filesval
 {
     int type;
     char *dir, *ext;
-    vector<char *> files;
+    std::vector<std::string> files;
     int millis;
 
     filesval(int type, const char *dir, const char *ext) : type(type), dir(newstring(dir)), ext(ext && ext[0] ? newstring(ext) : NULL), millis(-1) {}
-    ~filesval() { DELETEA(dir); DELETEA(ext); loopv(files) DELETEA(files[i]); files.shrink(0); }
+    ~filesval()
+    {
+        DELETEA(dir);
+        DELETEA(ext);
+    }
 
     void update()
     {
         if(type!=FILES_DIR || millis >= commandmillis) return;
-        files.deletearrays();
+        files.clear();
         listfiles(dir, ext, files);
-        files.sort();
-        loopv(files) if(i && !strcmp(files[i], files[i-1])) delete[] files.remove(i--);
+        std::sort( files.begin(), files.end(), sortless() );
+        for( size_t i = 0; i < files.size(); ++i )
+        {
+            if(i && files[i] == files[i-1])
+            {
+                files.erase( files.begin() + i-- );
+            }
+        }
         millis = totalmillis;
     }
 };
@@ -813,11 +825,11 @@ void complete(char *s, const char *cmdprefix)
         int commandsize = strchr(start, ' ')+1-start;
         prefixlen += commandsize;
         f->update();
-        loopv(f->files)
+        for( size_t i = 0; i < f->files.size(); ++i )
         {
-            if(strncmp(f->files[i], &start[commandsize], completesize-commandsize)==0 &&
-                strcmp(f->files[i], lastcomplete) > 0 && (!nextcomplete || strcmp(f->files[i], nextcomplete) < 0))
-                nextcomplete = f->files[i];
+            if(strncmp(f->files[i].data(), &start[commandsize], completesize-commandsize)==0 &&
+                strcmp(f->files[i].data(), lastcomplete) > 0 && (!nextcomplete || strcmp(f->files[i].data(), nextcomplete) < 0))
+                nextcomplete = f->files[i].data();
         }
     }
     else // complete using command names
@@ -871,10 +883,10 @@ void setiddesc(const char *s, const char *v, const char *f)
     }
     DELETEA(id->desc);
     if(v && *v) id->desc = newstring(v);
-    loopvrev(id->fields)
+    for( ssize_t i = id->fields.size() - 1; i >= 0; --i )
     {
         DELETEA(id->fields[i]);
-        id->fields.remove(i);
+        id->fields.erase( id->fields.begin() + i );
     }
     if(f && *f) explodelist(f, id->fields);
 }
@@ -882,10 +894,10 @@ ICOMMAND(0, setdesc, "sss", (char *s, char *t, char *f), setiddesc(s, t, f));
 
 void writecompletions(stream *f)
 {
-    vector<char *> cmds;
-    enumeratekt(completions, char *, k, filesval *, v, { if(v) cmds.add(k); });
-    cmds.sort();
-    loopv(cmds)
+    std::vector<char *> cmds;
+    enumeratekt(completions, char *, k, filesval *, v, { if(v) (cmds.emplace_back( k ), cmds.back()); });
+    std::sort( cmds.begin(), cmds.end(), sortless() );
+    for( size_t i = 0; i < cmds.size(); ++i )
     {
         char *k = cmds[i];
         filesval *v = completions[k];
@@ -977,18 +989,18 @@ bool consolegui(guient *g, int width, int height, const char *init, int &update)
         hline *h = NULL;
         if(commandbuf[0])
         {
-            if(history.empty() || history.last()->shouldsave())
+            if(history.empty() || history.back()->shouldsave())
             {
-                if(maxhistory && history.length() >= maxhistory)
+                if(maxhistory && history.size() >= maxhistory)
                 {
-                    loopi(history.length()-maxhistory+1) delete history[i];
-                    history.remove(0, history.length()-maxhistory+1);
+                    loopi(history.size()-maxhistory+1) delete history[i];
+                    history.erase( history.begin(), history.begin() + history.size()-maxhistory+1);
                 }
-                history.add(h = new hline)->save();
+                (history.emplace_back( h = new hline ), history.back())->save();
             }
-            else h = history.last();
+            else h = history.back();
         }
-        histpos = history.length();
+        histpos = history.size();
         inputcommand(NULL);
         if(h)
         {
