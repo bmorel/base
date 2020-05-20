@@ -29,13 +29,13 @@ namespace defend
         return colour;
     }
 
-    void checkcams(vector<cament *> &cameras)
+    void checkcams(std::vector<std::unique_ptr<cament>> &cameras)
     {
         for( size_t i = 0; i < st.flags.size(); ++i ) // flags/bases
         {
             defendstate::flag &f = st.flags[i];
             cameras.emplace_back(new cament(cameras.size(), cament::AFFINITY, i));
-            cament *c = cameras.back();
+            cament *c = cameras.back().get();
             c->o = f.o;
             c->o.z += enttype[AFFINITY].radius*2/3;
         }

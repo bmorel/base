@@ -244,12 +244,13 @@ namespace capture
         return sy;
     }
 
-    void checkcams(vector<cament *> &cameras)
+    void checkcams(std::vector<std::unique_ptr<cament>> &cameras)
     {
         for( size_t i = 0; i < st.flags.size(); ++i ) // flags/bases
         {
             capturestate::flag &f = st.flags[i];
-            cament *c = (cameras.emplace_back(new cament(cameras.size(), cament::AFFINITY, i)),cameras.back());
+            cameras.emplace_back(new cament(cameras.size(), cament::AFFINITY, i));
+            cament *c = cameras.back().get();
             c->o = f.pos(true);
             c->o.z += enttype[AFFINITY].radius*2/3;
             c->player = f.owner;

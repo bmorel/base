@@ -1712,7 +1712,7 @@ namespace game
     extern void vanitybuild(gameent *d);
     extern const char *vanityfname(gameent *d, int n, bool proj = false);
     extern bool followswitch(int n, bool other = false);
-    extern vector<cament *> cameras;
+    extern std::vector<std::unique_ptr<cament>> cameras;
     extern gameent *newclient(int cn);
     extern gameent *getclient(int cn);
     extern gameent *intersectclosest(vec &from, vec &to, gameent *at);
