@@ -565,7 +565,7 @@ void addblendbrush(const char *name, const char *imgname)
 
     BlendBrush *brush = new BlendBrush(name, s.w, s.h);
 
-    uchar *dst = brush->data, *srcrow = s.data;
+    uchar *dst = brush->data, *srcrow = s.data();
     loopi(s.h)
     {
         for(uchar *src = srcrow, *end = &srcrow[s.w*s.bpp]; src < end; src += s.bpp)

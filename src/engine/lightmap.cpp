@@ -695,7 +695,7 @@ static inline void generatealpha(lightmapworker *w, float tolerance, const vec &
         int mx = int(floor(s))%mask.w, my = int(floor(t))%mask.h;
         if(mx < 0) mx += mask.w;
         if(my < 0) my += mask.h;
-        uchar maskval = mask.data[mask.bpp*(mx + 1) - 1 + mask.pitch*my];
+        uchar maskval = mask.data()[mask.bpp*(mx + 1) - 1 + mask.pitch*my];
         switch(w->slot->layermaskmode)
         {
             case 2: alpha = min(alpha, maskval); break;

@@ -937,9 +937,9 @@ void save_mapshot(char *mname)
     glGenTextures(1, &tex);
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     ImageData image(screenw, screenh, 3);
-    memset(image.data, 0, 3*screenw*screenh);
+    memset(image.data(), 0, 3*screenw*screenh);
     drawcubemap(2, camera1->o, camera1->yaw, camera1->pitch, false, false, false);
-    glReadPixels(0, 0, screenw, screenh, GL_RGB, GL_UNSIGNED_BYTE, image.data);
+    glReadPixels(0, 0, screenw, screenh, GL_RGB, GL_UNSIGNED_BYTE, image.data());
     #if 0 // generates better images without this
     int x = 0, y = 0, w = screenw, h = screenh;
     if(w > h)

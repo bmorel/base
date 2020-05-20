@@ -251,7 +251,7 @@ static void reorientrgtc(GLenum format, int blocksize, int w, int h, uchar *src,
 
 #define writetex(t, body) do \
     { \
-        uchar *dstrow = t.data; \
+        uchar *dstrow = t.data(); \
         loop(y, t.h) \
         { \
             for(uchar *dst = dstrow, *end = &dstrow[t.w*t.bpp]; dst < end; dst += t.bpp) \
@@ -264,7 +264,7 @@ static void reorientrgtc(GLenum format, int blocksize, int w, int h, uchar *src,
 
 #define readwritetex(t, s, body) do \
     { \
-        uchar *dstrow = t.data, *srcrow = s.data; \
+        uchar *dstrow = t.data(), *srcrow = s.data(); \
         loop(y, t.h) \
         { \
             for(uchar *dst = dstrow, *src = srcrow, *end = &srcrow[s.w*s.bpp]; src < end; dst += t.bpp, src += s.bpp) \
@@ -278,7 +278,7 @@ static void reorientrgtc(GLenum format, int blocksize, int w, int h, uchar *src,
 
 #define read2writetex(t, s1, src1, s2, src2, body) do \
     { \
-        uchar *dstrow = t.data, *src1row = s1.data, *src2row = s2.data; \
+        uchar *dstrow = t.data(), *src1row = s1.data(), *src2row = s2.data(); \
         loop(y, t.h) \
         { \
             for(uchar *dst = dstrow, *end = &dstrow[t.w*t.bpp], *src1 = src1row, *src2 = src2row; dst < end; dst += t.bpp, src1 += s1.bpp, src2 += s2.bpp) \
@@ -357,7 +357,7 @@ void texreorient(ImageData &s, bool flipx, bool flipy, bool swapxy, int type = T
     case GL_COMPRESSED_RGBA_S3TC_DXT3_EXT:
     case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT:
         {
-            uchar *dst = d.data, *src = s.data;
+            uchar *dst = d.data(), *src = s.data();
             loopi(s.levels)
             {
                 reorients3tc(s.compressed, s.bpp, max(s.w>>i, 1), max(s.h>>i, 1), src, dst, flipx, flipy, swapxy, type==TEX_NORMAL);
@@ -371,7 +371,7 @@ void texreorient(ImageData &s, bool flipx, bool flipy, bool swapxy, int type = T
     case GL_COMPRESSED_LUMINANCE_LATC1_EXT:
     case GL_COMPRESSED_LUMINANCE_ALPHA_LATC2_EXT:
         {
-            uchar *dst = d.data, *src = s.data;
+            uchar *dst = d.data(), *src = s.data();
             loopi(s.levels)
             {
                 reorientrgtc(s.compressed, s.bpp, max(s.w>>i, 1), max(s.h>>i, 1), src, dst, flipx, flipy, swapxy);
@@ -381,8 +381,8 @@ void texreorient(ImageData &s, bool flipx, bool flipy, bool swapxy, int type = T
             break;
         }
     default:
-        if(type==TEX_NORMAL && s.bpp >= 3) reorientnormals(s.data, s.w, s.h, s.bpp, s.pitch, d.data, flipx, flipy, swapxy);
-        else reorienttexture(s.data, s.w, s.h, s.bpp, s.pitch, d.data, flipx, flipy, swapxy);
+        if(type==TEX_NORMAL && s.bpp >= 3) reorientnormals(s.data(), s.w, s.h, s.bpp, s.pitch, d.data(), flipx, flipy, swapxy);
+        else reorienttexture(s.data(), s.w, s.h, s.bpp, s.pitch, d.data(), flipx, flipy, swapxy);
         break;
     }
     s.replace(d);
@@ -407,10 +407,10 @@ void texoffset(ImageData &s, int xoffset, int yoffset)
     yoffset %= s.h;
     if(!xoffset && !yoffset) return;
     ImageData d(s.w, s.h, s.bpp);
-    uchar *src = s.data;
+    uchar *src = s.data();
     loop(y, s.h)
     {
-        uchar *dst = (uchar *)d.data+((y+yoffset)%d.h)*d.pitch;
+        uchar *dst = (uchar *)d.data()+((y+yoffset)%d.h)*d.pitch;
         memcpy(dst+xoffset*s.bpp, src, (s.w-xoffset)*s.bpp);
         memcpy(dst, src+(s.w-xoffset)*s.bpp, xoffset*s.bpp);
         src += s.pitch;
@@ -420,8 +420,8 @@ void texoffset(ImageData &s, int xoffset, int yoffset)
 
 void texcrop(ImageData &s, ImageData &d, int x, int y, int w, int h)
 {
-    d.setdata(NULL, w, h, s.bpp);
-    uchar *dst = d.data, *src = &s.data[y*s.pitch + x*s.bpp];
+    d.setdata( w, h, s.bpp);
+    uchar *dst = d.data(), *src = &s.data()[y*s.pitch + x*s.bpp];
     loopi(h)
     {
         memcpy(dst, src, w*s.bpp);
@@ -554,7 +554,7 @@ void texagrad(ImageData &s, float x2, float y2, float x1, float y1)
     float dx = (maxx - minx)/max(s.w-1, 1),
           dy = (maxy - miny)/max(s.h-1, 1),
           cury = miny;
-    for(uchar *dstrow = s.data + s.bpp - 1, *endrow = dstrow + s.h*s.pitch; dstrow < endrow; dstrow += s.pitch)
+    for(uchar *dstrow = s.data() + s.bpp - 1, *endrow = dstrow + s.h*s.pitch; dstrow < endrow; dstrow += s.pitch)
     {
         float curx = minx;
         for(uchar *dst = dstrow, *end = &dstrow[s.w*s.bpp]; dst < end; dst += s.bpp)
@@ -1007,7 +1007,7 @@ static Texture *newtexture(Texture *t, const char *rname, ImageData &s, int clam
     t->type = Texture::IMAGE;
     if(transient) t->type |= Texture::TRANSIENT;
     if(clamp&0x300) t->type |= Texture::MIRROR;
-    if(!s.data)
+    if(!s.data())
     {
         t->type |= Texture::STUB;
         t->w = t->h = t->xs = t->ys = t->bpp = 0;
@@ -1048,7 +1048,7 @@ static Texture *newtexture(Texture *t, const char *rname, ImageData &s, int clam
         if(t->frames.empty()) t->frames.emplace_back( 0 );
         glGenTextures(1, &t->frames[0]);
 
-        uchar *data = s.data;
+        uchar *data = s.data();
         int levels = s.levels, level = 0;
         if(canreduce && texreduce) loopi(min(texreduce, s.levels-1))
         {
@@ -1079,13 +1079,13 @@ static Texture *newtexture(Texture *t, const char *rname, ImageData &s, int clam
             glGenTextures(1, &t->frames[i]);
 
             ImageData cropped;
-            uchar *data = s.data;
+            uchar *data = s.data();
             int pitch = s.pitch;
             if(hasanim)
             {
                 int sx = (i%anim->x)*anim->w, sy = (((i-(i%anim->x))/anim->x)%anim->y)*anim->h;
                 texcrop(s, cropped, sx, sy, anim->w, anim->h);
-                data = cropped.data;
+                data = cropped.data();
                 pitch = cropped.pitch;
             }
 
@@ -1179,7 +1179,7 @@ SDL_Surface *fixsurfaceformat(SDL_Surface *s)
 void texflip(ImageData &s)
 {
     ImageData d(s.w, s.h, s.bpp);
-    uchar *dst = d.data, *src = &s.data[s.pitch*s.h];
+    uchar *dst = d.data(), *src = &s.data()[s.pitch*s.h];
     loopi(s.h)
     {
         src -= s.pitch;
@@ -1192,7 +1192,7 @@ void texflip(ImageData &s)
 void texnormal(ImageData &s, int emphasis)
 {
     ImageData d(s.w, s.h, 3);
-    uchar *src = s.data, *dst = d.data;
+    uchar *src = s.data(), *dst = d.data();
     loop(y, s.h) loop(x, s.w)
     {
         vec normal(0.0f, 0.0f, 255.0f/emphasis);
@@ -1310,7 +1310,7 @@ void texblur(ImageData &s, int n, int r)
     loopi(r)
     {
         ImageData d(s.w, s.h, s.bpp);
-        blurtexture(n, s.bpp, s.w, s.h, d.data, s.data);
+        blurtexture(n, s.bpp, s.w, s.h, d.data(), s.data());
         s.replace(d);
     }
 }
@@ -1318,7 +1318,7 @@ void texblur(ImageData &s, int n, int r)
 void scaleimage(ImageData &s, int w, int h)
 {
     ImageData d(w, h, s.bpp);
-    scaletexture(s.data, s.w, s.h, s.bpp, s.pitch, d.data, w, h);
+    scaletexture(s.data(), s.w, s.h, s.bpp, s.pitch, d.data(), w, h);
     s.replace(d);
 }
 
@@ -1388,10 +1388,10 @@ static bool texturedata(ImageData &d, const char *tname, Slot::Tex *tex = NULL, 
             if(msg) conoutf("\frcould not load texture %s", dfile);
             return false;
         }
-        if(d.data && !d.compressed && !dds && compress) *compress = scaledds;
+        if(d.data() && !d.compressed && !dds && compress) *compress = scaledds;
     }
 
-    if(!d.data)
+    if(!d.data())
     {
         SDL_Surface *s = loadsurface(file);
         if(!s) { if(msg) conoutf("\frcould not load texture %s", file); return false; }
@@ -1483,9 +1483,9 @@ uchar *loadalphamask(Texture *t)
     if(t->alphamask) return t->alphamask;
     if(!(t->type&Texture::ALPHA)) return NULL;
     ImageData s;
-    if(!texturedata(s, t->name, NULL, false) || !s.data || s.compressed) return NULL;
+    if(!texturedata(s, t->name, NULL, false) || !s.data() || s.compressed) return NULL;
     t->alphamask = new uchar[s.h * ((s.w+7)/8)];
-    uchar *srcrow = s.data, *dst = t->alphamask-1;
+    uchar *srcrow = s.data(), *dst = t->alphamask-1;
     loop(y, s.h)
     {
         uchar *src = srcrow+s.bpp-1;
@@ -2517,25 +2517,25 @@ Texture *loadthumbnail(Slot &slot)
         texturedata(s, NULL, &slot.sts[0], false);
         if(glow >= 0) texturedata(g, NULL, &slot.sts[glow], false);
         if(layer) texturedata(l, NULL, &layer->slot->sts[0], false);
-        if(!s.data) t = slot.thumbnail = notexture;
+        if(!s.data()) t = slot.thumbnail = notexture;
         else
         {
             if(colorscale != vec(1, 1, 1)) texmad(s, colorscale, vec(0, 0, 0));
             int xs = s.w, ys = s.h;
             if(s.w > 64 || s.h > 64) scaleimage(s, min(s.w, 64), min(s.h, 64));
-            if(g.data)
+            if(g.data())
             {
                 if(g.w != s.w || g.h != s.h) scaleimage(g, s.w, s.h);
                 addglow(s, g, glowcolor);
             }
-            if(l.data)
+            if(l.data())
             {
                 vec layerscale = layer->getcolorscale();
                 if(layerscale != vec(1, 1, 1)) texmad(l, layerscale, vec(0, 0, 0));
                 if(l.w != s.w/2 || l.h != s.h/2) scaleimage(l, s.w/2, s.h/2);
                 forcergbimage(s);
                 forcergbimage(l);
-                uchar *dstrow = &s.data[s.pitch*l.h + s.bpp*l.w], *srcrow = l.data;
+                uchar *dstrow = &s.data()[s.pitch*l.h + s.bpp*l.w], *srcrow = l.data();
                 loop(y, l.h)
                 {
                     for(uchar *dst = dstrow, *src = srcrow, *end = &srcrow[l.w*l.bpp]; src < end; dst += s.bpp, src += l.bpp)
@@ -2563,7 +2563,7 @@ void loadlayermasks()
         {
             slot.layermask = new ImageData;
             texturedata(*slot.layermask, slot.layermaskname);
-            if(!slot.layermask->data) DELETEP(slot.layermask);
+            if(!slot.layermask->data()) DELETEP(slot.layermask);
         }
     }
 }
@@ -2637,7 +2637,7 @@ Texture *cubemaploadwildcard(Texture *t, const char *name, bool mipit, bool msg,
         }
         ImageData &s = surface[i];
         texturedata(s, sname, NULL, msg, &compress);
-        if(!s.data) return NULL;
+        if(!s.data()) return NULL;
         if(s.w != s.h)
         {
             if(msg) conoutf("\frcubemap texture %s does not have square size", sname);
@@ -2701,7 +2701,7 @@ Texture *cubemaploadwildcard(Texture *t, const char *name, bool mipit, bool msg,
         if(s.compressed)
         {
             int w = s.w, h = s.h, levels = s.levels, level = 0;
-            uchar *data = s.data;
+            uchar *data = s.data();
             while(levels > 1 && (w > t->w || h > t->h))
             {
                 data += s.calclevelsize(level++);
@@ -2713,7 +2713,7 @@ Texture *cubemaploadwildcard(Texture *t, const char *name, bool mipit, bool msg,
         }
         else
         {
-            createtexture(!i ? t->frames[0] : 0, t->w, t->h, s.data, 3, mipit ? 2 : 1, component, side.target, s.w, s.h, s.pitch, false, format, true);
+            createtexture(!i ? t->frames[0] : 0, t->w, t->h, s.data(), 3, mipit ? 2 : 1, component, side.target, s.w, s.h, s.pitch, false, format, true);
         }
     }
     t->id = t->frames.size() ? t->frames[0] : 0;
@@ -3058,8 +3058,8 @@ VAR(0, dbgdds, 0, 0, 1);
 static void name(ImageData &s) \
 { \
     ImageData d(s.w, s.h, dbpp); \
-    uchar *dst = d.data; \
-    const uchar *src = s.data; \
+    uchar *dst = d.data(); \
+    const uchar *src = s.data(); \
     for(int by = 0; by < s.h; by += s.align) \
     { \
         for(int bx = 0; bx < s.w; bx += s.align, src += s.bpp) \
@@ -3245,9 +3245,9 @@ bool loaddds(const char *filename, ImageData &image, int force)
         case GL_COMPRESSED_LUMINANCE_ALPHA_LATC2_EXT:
         case GL_COMPRESSED_RG_RGTC2: bpp = 16; break;
     }
-    image.setdata(NULL, d.dwWidth, d.dwHeight, bpp, !supported || force > 0 ? 1 : d.dwMipMapCount, 4, format);
+    image.setdata( d.dwWidth, d.dwHeight, bpp, !supported || force > 0 ? 1 : d.dwMipMapCount, 4, format);
     size_t size = image.calcsize();
-    if(f->read(image.data, size) != size) { delete f; image.cleanup(); return false; }
+    if(f->read(image.data(), size) != size) { delete f; image.cleanup(); return false; }
     delete f;
     if(!supported || force > 0) switch(format)
     {
@@ -3432,7 +3432,7 @@ void savepng(const char *filename, ImageData &image, int compress, bool flip)
         uchar filter = 0;
         loopj(2)
         {
-            z.next_in = j ? (Bytef *)image.data + (flip ? image.h-i-1 : i)*image.pitch : (Bytef *)&filter;
+            z.next_in = j ? (Bytef *)image.data() + (flip ? image.h-i-1 : i)*image.pitch : (Bytef *)&filter;
             z.avail_in = j ? image.w*image.bpp : 1;
             while(z.avail_in > 0)
             {
@@ -3519,7 +3519,7 @@ void savetga(const char *filename, ImageData &image, int compress, bool flip)
     uchar buf[128*4];
     loopi(image.h)
     {
-        uchar *src = image.data + (flip ? i : image.h - i - 1)*image.pitch;
+        uchar *src = image.data() + (flip ? i : image.h - i - 1)*image.pitch;
         for(int remaining = image.w; remaining > 0;)
         {
             int raw = 1;
@@ -3578,9 +3578,9 @@ void saveimage(const char *fname, ImageData &image, int format, int compress, bo
         case IFMT_TGA: savetga(filename, image, compress, flip); break;
         case IFMT_BMP:
         {
-            ImageData flipped(image.w, image.h, image.bpp, image.data);
+            ImageData flipped(image.w, image.h, image.bpp, image.data());
             if(flip) texflip(flipped);
-            SDL_Surface *s = wrapsurface(flipped.data, flipped.w, flipped.h, flipped.bpp);
+            SDL_Surface *s = wrapsurface(flipped.data(), flipped.w, flipped.h, flipped.bpp);
             if(!s) break;
             stream *f = openfile(filename, "wb");
             if(f)

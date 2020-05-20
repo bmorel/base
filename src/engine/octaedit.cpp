@@ -1635,7 +1635,7 @@ void brushimport(char *name)
         if(s.w > MAXBRUSH || s.h > MAXBRUSH) // only use max size
             scaleimage(s, MAXBRUSH, MAXBRUSH);
 
-        uchar *pixel = s.data;
+        uchar *pixel = s.data();
         int value, x, y;
 
         clearbrush();
