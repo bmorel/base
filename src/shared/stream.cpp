@@ -1,3 +1,5 @@
+#include <vector>
+#include <string>
 #include <algorithm>
 using std::swap;
 
@@ -506,7 +508,7 @@ const char *findfile(const char *filename, const char *mode)
     return s;
 }
 
-bool listdir(const char *dirname, bool rel, const char *ext, vector<char *> &files)
+bool listdir(const char *dirname, bool rel, const char *ext, std::vector<std::string> &files)
 {
     size_t extsize = ext ? strlen(ext)+1 : 0;
 #ifdef WIN32
@@ -516,7 +518,7 @@ bool listdir(const char *dirname, bool rel, const char *ext, vector<char *> &fil
     if(Find != INVALID_HANDLE_VALUE)
     {
         do {
-            if(!ext) files.add(newstring(FindFileData.cFileName));
+            if(!ext) files.emplace_back( FindFileData.cFileName );
             else
             {
                 size_t namelen = strlen(FindFileData.cFileName);
@@ -524,7 +526,7 @@ bool listdir(const char *dirname, bool rel, const char *ext, vector<char *> &fil
                 {
                     namelen -= extsize;
                     if(FindFileData.cFileName[namelen] == '.' && strncmp(FindFileData.cFileName+namelen+1, ext, extsize-1)==0)
-                        files.add(newstring(FindFileData.cFileName, namelen));
+                        files.emplace_back( FindFileData.cFileName, namelen );
                 }
             }
         } while(FindNextFile(Find, &FindFileData));
@@ -539,7 +541,10 @@ bool listdir(const char *dirname, bool rel, const char *ext, vector<char *> &fil
         struct dirent *de;
         while((de = readdir(d)) != NULL)
         {
-            if(!ext) files.add(newstring(de->d_name));
+            if(!ext)
+            {
+                files.emplace_back( de->d_name );
+            }
             else
             {
                 size_t namelen = strlen(de->d_name);
@@ -547,7 +552,59 @@ bool listdir(const char *dirname, bool rel, const char *ext, vector<char *> &fil
                 {
                     namelen -= extsize;
                     if(de->d_name[namelen] == '.' && strncmp(de->d_name+namelen+1, ext, extsize-1)==0)
-                        files.add(newstring(de->d_name, namelen));
+                        files.emplace_back( std::string( de->d_name, namelen ) );
+                }
+            }
+        }
+        closedir(d);
+        return true;
+    }
+#endif
+    else return false;
+}
+
+bool listdir(const char *dirname, bool rel, const char *ext, vector<char *> &files)
+{
+    size_t extsize = ext ? strlen(ext)+1 : 0;
+#ifdef WIN32
+    defformatstring(pathname, rel ? ".\\%s\\*.%s" : "%s\\*.%s", dirname, ext ? ext : "*");
+    WIN32_FIND_DATA FindFileData;
+    HANDLE Find = FindFirstFile(pathname, &FindFileData);
+    if(Find != INVALID_HANDLE_VALUE)
+    {
+        do {
+            if(!ext) files.emplace_back(newstring(FindFileData.cFileName));
+            else
+            {
+                size_t namelen = strlen(FindFileData.cFileName);
+                if(namelen > extsize)
+                {
+                    namelen -= extsize;
+                    if(FindFileData.cFileName[namelen] == '.' && strncmp(FindFileData.cFileName+namelen+1, ext, extsize-1)==0)
+                        files.emplace_back(newstring(FindFileData.cFileName, namelen));
+                }
+            }
+        } while(FindNextFile(Find, &FindFileData));
+        FindClose(Find);
+        return true;
+    }
+#else
+    defformatstring(pathname, rel ? "./%s" : "%s", dirname);
+    DIR *d = opendir(pathname);
+    if(d)
+    {
+        struct dirent *de;
+        while((de = readdir(d)) != NULL)
+        {
+            if(!ext) files.emplace_back(newstring(de->d_name));
+            else
+            {
+                size_t namelen = strlen(de->d_name);
+                if(namelen > extsize)
+                {
+                    namelen -= extsize;
+                    if(de->d_name[namelen] == '.' && strncmp(de->d_name+namelen+1, ext, extsize-1)==0)
+                        files.emplace_back(newstring(de->d_name, namelen));
                 }
             }
         }
@@ -559,6 +616,30 @@ bool listdir(const char *dirname, bool rel, const char *ext, vector<char *> &fil
 }
 
 int listfiles(const char *dir, const char *ext, vector<char *> &files)
+{
+    string dirname;
+    copystring(dirname, dir);
+    path(dirname);
+    size_t dirlen = strlen(dirname);
+    while(dirlen > 1 && dirname[dirlen-1] == PATHDIV) dirname[--dirlen] = '\0';
+    int dirs = 0;
+    if(listdir(dirname, true, ext, files)) dirs++;
+    string s;
+    if(homedir[0])
+    {
+        formatstring(s, "%s%s", homedir, dirname);
+        if(listdir(s, false, ext, files)) dirs++;
+    }
+    loopvrev(packagedirs) if((packagedirs[i].flags & packagedirmask) == packagedirs[i].flags)
+    {
+        formatstring(s, "%s%s", packagedirs[i].name, dirname);
+        if(listdir(s, false, ext, files)) dirs++;
+    }
+    dirs += listzipfiles(dirname, ext, files);
+    return dirs;
+}
+
+int listfiles(const char *dir, const char *ext, std::vector<std::string> &files)
 {
     string dirname;
     copystring(dirname, dir);

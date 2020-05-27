@@ -3,6 +3,8 @@
 #ifndef _TOOLS_H
 #define _TOOLS_H
 #include <utility>
+#include <vector>
+#include <string>
 
 #ifdef NULL
 #undef NULL
@@ -234,6 +236,31 @@ struct databuf
     T *buf;
     int len, maxlen;
     uchar flags;
+
+    int size() const
+    {
+        return length();
+    }
+
+    T const* data( void ) const
+    {
+        return buf;
+    }
+
+    T * data( void )
+    {
+        return buf;
+    }
+
+    T const& back( void ) const
+    {
+        return buf + len;
+    }
+
+    T * back( void )
+    {
+        return buf + len;
+    }
 
     databuf() : buf(NULL), len(0), maxlen(0), flags(0) {}
 
@@ -567,6 +594,96 @@ static inline bool htcmp(GLuint x, GLuint y)
 
 template <class T> struct vector
 {
+    void insert(T* position, T const* start, T const* end )
+    {
+        insert( position - buf, start, end - start );
+    }
+    void resize( int sz )
+    {
+        reserve( sz - ulen );
+        setsize( sz );
+    }
+
+    T* data( void )
+    {
+        return buf;
+    }
+
+    T const* data( void ) const
+    {
+        return buf;
+    }
+
+    void clear( void )
+    {
+        setsize( 0 );
+    }
+
+    T * begin( void )
+    {
+        return buf;
+    }
+
+    T * end( void )
+    {
+        return buf + length();
+    }
+
+    T const* begin( void ) const
+    {
+        return buf;
+    }
+
+    T const* end( void ) const
+    {
+        return buf + length();
+    }
+
+    int size( void ) const
+    {
+        return length();
+    }
+
+    void erase( T const* it )
+    {
+        remove( it - buf );
+    }
+
+    void erase( T const* start, T const* end )
+    {
+        remove( start - buf, end - buf );
+    }
+
+    void pop_back( void )
+    {
+        pop();
+    }
+
+    void emplace_back( T && el )
+    {
+        add( el );
+    }
+
+    void emplace_back( void )
+    {
+        add();
+    }
+
+    void emplace_back( T const& el )
+    {
+        add( el );
+    }
+
+    T const& back( void ) const
+    {
+        return buf[length() - 1];
+    }
+
+    T& back( void )
+    {
+        return buf[length() - 1];
+    }
+
     static const int MINSIZE = 8;
 
     T *buf;
@@ -623,9 +740,9 @@ template <class T> struct vector
     {
         if(!ulen)
         {
-            swap(buf, v.buf);
-            swap(ulen, v.ulen);
-            swap(alen, v.alen);
+            std::swap(buf, v.buf);
+            std::swap(ulen, v.ulen);
+            std::swap(alen, v.alen);
         }
         else
         {
@@ -855,6 +972,36 @@ template <class T> struct smallvector
     T *buf;
     int len;
 
+    T * begin( void )
+    {
+        return buf;
+    }
+
+    T * end( void )
+    {
+        return buf + length();
+    }
+
+    T const* begin( void ) const
+    {
+        return buf;
+    }
+
+    T const* end( void ) const
+    {
+        return buf + length();
+    }
+
+    int size() const
+    {
+        return length();
+    }
+
+    void emplace_back( T const& el )
+    {
+        put( el );
+    }
+
     smallvector() : buf(NULL), len(0)
     {
     }
@@ -921,6 +1068,24 @@ template <class T> struct smallvector
         if(i >= len) return;
         if(isclass<T>::yes) for(int j = i; j < len; j++) buf[j].~T();
         growbuf(i);
+    }
+
+    void erase( T const* it )
+    {
+        remove( it - buf );
+    }
+
+    void clear( void )
+    {
+        return setsize( 0 );
+    }
+    T* data( void )
+    {
+        return buf;
+    }
+    void resize(int i)
+    {
+        setsize( i );
     }
 
     void setsize(int i)
@@ -1510,9 +1675,15 @@ extern stream *opengzfile(const char *filename, const char *mode, stream *file =
 extern stream *openutf8file(const char *filename, const char *mode, stream *file = NULL);
 extern char *loadstream(stream *f, size_t *size, bool utf8 = true);
 extern char *loadfile(const char *fn, size_t *size, bool utf8 = true);
-extern bool listdir(const char *dir, bool rel, const char *ext, vector<char *> &files);
+
+extern bool listdir(const char *dir, bool rel, const char *ext, std::vector<std::string> &files);
+
 extern int listfiles(const char *dir, const char *ext, vector<char *> &files);
+extern int listfiles(const char *dir, const char *ext, std::vector<std::string> &files);
+
 extern int listzipfiles(const char *dir, const char *ext, vector<char *> &files);
+extern int listzipfiles(const char *dir, const char *ext, std::vector<std::string> & files);
+
 extern void backup(const char *fname, const char *ext, int revision = 0, int start = 1, bool store = false, bool full = true);
 
 extern void endianswap(void *, int, int);
@@ -1521,19 +1692,39 @@ extern uint randomMT();
 extern void putint(ucharbuf &p, int n);
 extern void putint(packetbuf &p, int n);
 extern void putint(vector<uchar> &p, int n);
+extern void putint(std::vector<uchar> &p, int n);
 extern int getint(ucharbuf &p);
 extern void putuint(ucharbuf &p, int n);
 extern void putuint(packetbuf &p, int n);
 extern void putuint(vector<uchar> &p, int n);
+extern void putuint(std::vector<uchar> &p, int n);
 extern int getuint(ucharbuf &p);
 extern void putfloat(ucharbuf &p, float f);
 extern void putfloat(packetbuf &p, float f);
 extern void putfloat(vector<uchar> &p, float f);
+extern void putfloat(std::vector<uchar> &p, float f);
 extern float getfloat(ucharbuf &p);
 extern void sendstring(const char *t, ucharbuf &p);
 extern void sendstring(const char *t, packetbuf &p);
 extern void sendstring(const char *t, vector<uchar> &p);
+extern void sendstring(const char *t, std::vector<uchar> &p);
 extern void getstring(char *t, ucharbuf &p, size_t len);
 template<size_t N> static inline void getstring(char (&t)[N], ucharbuf &p) { getstring(t, p, N); }
+
+#include <algorithm>
+#include <iterator>
+
+template <typename ARR, typename VAL>
+int find( ARR const& array, VAL const& value )
+{
+    auto beg = std::begin( array );
+    auto end = std::end( array );
+    if( end <= beg )
+    {
+        return -1;
+    }
+    auto it = std::find( beg, end, value );
+    return end == it ? -1 : std::distance( it, beg );
+}
 
 #endif

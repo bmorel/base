@@ -1,5 +1,6 @@
 // implementation of generic tools
 
+#include <string>
 #include <algorithm>
 using std::swap;
 
@@ -50,9 +51,30 @@ static inline void putint_(T &p, int n)
     else if(n<0x8000 && n>=-0x8000) { p.put(0x80); p.put(n); p.put(n>>8); }
     else { p.put(0x81); p.put(n); p.put(n>>8); p.put(n>>16); p.put(n>>24); }
 }
+
+void putint_( std::vector<uchar> &p, int n )
+{
+    if(n<128 && n>-127) p.push_back(n);
+    else if(n<0x8000 && n>=-0x8000)
+    {
+        p.push_back(0x80);
+        p.push_back(n);
+        p.push_back(n>>8);
+    }
+    else
+    {
+        p.push_back(0x81);
+        p.push_back(n);
+        p.push_back(n>>8);
+        p.push_back(n>>16);
+        p.push_back(n>>24);
+    }
+}
+
 void putint(ucharbuf &p, int n) { putint_(p, n); }
 void putint(packetbuf &p, int n) { putint_(p, n); }
 void putint(vector<uchar> &p, int n) { putint_(p, n); }
+void putint(std::vector<uchar> &p, int n) { putint_(p, n); }
 
 int getint(ucharbuf &p)
 {
@@ -109,9 +131,16 @@ static inline void putfloat_(T &p, float f)
     lilswap(&f, 1);
     p.put((uchar *)&f, sizeof(float));
 }
+
+void putfloat_(std::vector<uchar> &p, float f)
+{
+    lilswap(&f, 1);
+    p.insert(p.end(), (uchar *)&f, ((uchar *)&f)+sizeof(float));
+}
 void putfloat(ucharbuf &p, float f) { putfloat_(p, f); }
 void putfloat(packetbuf &p, float f) { putfloat_(p, f); }
 void putfloat(vector<uchar> &p, float f) { putfloat_(p, f); }
+void putfloat(std::vector<uchar> &p, float f) { putfloat_(p, f); }
 
 float getfloat(ucharbuf &p)
 {
@@ -126,9 +155,16 @@ static inline void sendstring_(const char *t, T &p)
     while(*t) putint(p, *t++);
     putint(p, 0);
 }
+
+static inline void sendstring_(const char *t, std::vector<uchar> &p)
+{
+    while(*t) putint(p, *t++);
+    putint(p, 0);
+}
 void sendstring(const char *t, ucharbuf &p) { sendstring_(t, p); }
 void sendstring(const char *t, packetbuf &p) { sendstring_(t, p); }
 void sendstring(const char *t, vector<uchar> &p) { sendstring_(t, p); }
+void sendstring(const char *t, std::vector<uchar> &p ) { sendstring_(t, p); }
 
 void getstring(char *text, ucharbuf &p, size_t len)
 {

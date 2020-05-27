@@ -1,3 +1,5 @@
+#include <vector>
+#include <string>
 #include <algorithm>
 using std::swap;
 
@@ -553,6 +555,38 @@ bool findzipfile(const char *name)
         if(arch->files.access(name)) return true;
     }
     return false;
+}
+
+int listzipfiles(const char *dir, const char *ext, std::vector<std::string> &files)
+{
+    dir = copypath(dir, true);
+    size_t extsize = ext ? strlen(ext)+1 : 0, dirsize = strlen(dir);
+    int dirs = 0;
+    loopvrev(archives)
+    {
+        ziparchive *arch = archives[i];
+        int oldsize = files.size();
+        enumerate(arch->files, zipfile, f,
+        {
+            if(strncmp(f.name, dir, dirsize)) continue;
+            const char *name = f.name + dirsize;
+            if(name[0] == PATHDIV) name++;
+            if(strchr(name, PATHDIV)) continue;
+            if(!ext) files.push_back(newstring(name));
+            else
+            {
+                size_t namelen = strlen(name);
+                if(namelen > extsize)
+                {
+                    namelen -= extsize;
+                    if(name[namelen] == '.' && strncmp(name+namelen+1, ext, extsize-1)==0)
+                        files.push_back(newstring(name, namelen));
+                }
+            }
+        });
+        if(files.size() > oldsize) dirs++;
+    }
+    return dirs;
 }
 
 int listzipfiles(const char *dir, const char *ext, vector<char *> &files)

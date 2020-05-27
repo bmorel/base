@@ -1,6 +1,8 @@
 #ifndef __GAME_H__
 #define __GAME_H__
 
+#include <memory>
+
 #include "engine.h"
 
 #define VERSION_GAMEID "fps"

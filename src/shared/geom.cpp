@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <string>
 using std::swap;
 
 #include "cube.h"
