@@ -1704,7 +1704,8 @@ namespace game
     extern vec swaypush, swaydir;
     extern string clientmap;
 
-    extern gameent *player1, *focus;
+    extern gameent player1;
+    extern gameent *focus;
     extern vector<gameent *> players, waiting;
 
     struct avatarent : dynent

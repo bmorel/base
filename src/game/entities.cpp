@@ -421,7 +421,7 @@ namespace entities
         {
             gameentity &f = *(gameentity *)ents[drop];
             attr = w_attr(game::gamemode, game::mutators, f.type, f.attrs[0], sweap);
-            if(isweap(attr)) projs::drop(d, attr, drop, ammo, d == game::player1 || d->ai, 0, weap);
+            if(isweap(attr)) projs::drop(d, attr, drop, ammo, d == &game::player1 || d->ai, 0, weap);
         }
         if(e.spawned() != spawn)
         {
@@ -592,7 +592,7 @@ namespace entities
                 }
                 case TR_SCRIPT:
                 {
-                    if(d == game::player1)
+                    if(d == &game::player1)
                     {
                         defformatstring(s, "on_trigger_%d", e.attrs[0]);
                         trigger = d; RUNWORLD(s); trigger = NULL;
@@ -609,7 +609,7 @@ namespace entities
     {
         loopi(lastent(TRIGGER)) if(ents[i]->type == TRIGGER && ents[i]->attrs[0] == n && ents[i]->attrs[2] == TA_MANUAL) runtrigger(i, d, false);
     }
-    ICOMMAND(0, exectrigger, "i", (int *n), if(identflags&IDF_WORLD) runtriggers(*n, trigger ? trigger : game::player1));
+    ICOMMAND(0, exectrigger, "i", (int *n), if(identflags&IDF_WORLD) runtriggers(*n, trigger ? trigger : &game::player1));
 
     bool execitem(int n, dynent *d, vec &pos, float dist)
     {
@@ -625,7 +625,7 @@ namespace entities
                     {
                         int sweap = m_weapon(f->actortype, game::gamemode, game::mutators), attr = w_attr(game::gamemode, game::mutators, e.type, e.attrs[0], sweap);
                         if(!isweap(attr)) return false;
-                        if(f == game::player1 && !weapons::canuse(attr)) return true;
+                        if(f == &game::player1 && !weapons::canuse(attr)) return true;
                         if(!f->canuse(e.type, attr, e.attrs, sweap, lastmillis, (1<<W_S_SWITCH)))
                         {
                             if(e.type != WEAPON) return false;
@@ -806,7 +806,7 @@ namespace entities
                 {
                     if(d->state != CS_ALIVE || !gameent::is(d)) break;
                     gameent *g = (gameent *)d;
-                    if((e.attrs[2] == TA_ACTION && g->action[AC_USE] && g == game::player1) || e.attrs[2] == TA_AUTO) runtrigger(n, g);
+                    if((e.attrs[2] == TA_ACTION && g->action[AC_USE] && g == &game::player1) || e.attrs[2] == TA_AUTO) runtrigger(n, g);
                 }
                 else if(e.type == CHECKPOINT)
                 {
@@ -955,7 +955,7 @@ namespace entities
 
     bool cansee(int n)
     {
-        if(game::player1->state != CS_EDITING && !(showentinfo&64)) return false;
+        if(game::player1.state != CS_EDITING && !(showentinfo&64)) return false;
         if(!( 0 <= n && n < ents.size() )) return false;
         if(ents[n]->type == NOTUSED && (n != enthover && find( entgroup, n ) < 0)) return false;
         return true;
@@ -1259,7 +1259,7 @@ namespace entities
     {
         extentity &e = *ents[i];
         fixentity(i, true);
-        if(m_edit(game::gamemode) && game::player1->state == CS_EDITING)
+        if(m_edit(game::gamemode) && game::player1.state == CS_EDITING)
             client::addmsg(N_EDITENT, "ri5iv", i, (int)(e.o.x*DMF), (int)(e.o.y*DMF), (int)(e.o.z*DMF), e.type, e.attrs.size(), e.attrs.size(), e.attrs.data()); // FIXME
         if(e.type < MAXENTTYPES)
         {
@@ -2054,7 +2054,7 @@ namespace entities
             {
                 case PLAYERSTART:
                 {
-                    part_radius(vec(e.o).add(vec(0, 0, game::player1->zradius/2)), vec(game::player1->xradius, game::player1->yradius, game::player1->zradius/2), showentsize, 1, 1, TEAM(e.attrs[0], colour));
+                    part_radius(vec(e.o).add(vec(0, 0, game::player1.zradius/2)), vec(game::player1.xradius, game::player1.yradius, game::player1.zradius/2), showentsize, 1, 1, TEAM(e.attrs[0], colour));
                     break;
                 }
                 case ACTOR:
@@ -2178,7 +2178,7 @@ namespace entities
 
     void adddynlights()
     {
-        if(game::player1->state == CS_EDITING && showlighting)
+        if(game::player1.state == CS_EDITING && showlighting)
         {
             #define islightable(q) ((q)->type == LIGHT && (q)->attrs[0] > 0 && !(q)->links.size())
             for( size_t i = 0; i < entgroup.size(); ++i )
@@ -2222,11 +2222,11 @@ namespace entities
         }
         if((m_edit(game::gamemode) || m_race(game::gamemode)) && routeid >= 0 && droproute)
         {
-            if(game::player1->state == CS_ALIVE)
+            if(game::player1.state == CS_ALIVE)
             {   // don't start until the player begins moving
-                if(lastroutenode >= 0 || game::player1->move || game::player1->strafe)
+                if(lastroutenode >= 0 || game::player1.move || game::player1.strafe)
                 {
-                    const vec o = game::player1->feetpos();
+                    const vec o = game::player1.feetpos();
                     int curnode = lastroutenode;
                     if(!( 0 <= curnode && curnode < ents.size() ) || ents[curnode]->o.dist(o) >= droproutedist)
                     {
@@ -2242,19 +2242,19 @@ namespace entities
                     {
                         attrvector attrs;
                         attrs.emplace_back( routeid );
-                        attrs.add(int(game::player1->yaw));
-                        attrs.add(int(game::player1->pitch));
-                        attrs.emplace_back( game::player1->move );
-                        attrs.emplace_back( game::player1->strafe );
+                        attrs.add(int(game::player1.yaw));
+                        attrs.add(int(game::player1.pitch));
+                        attrs.emplace_back( game::player1.move );
+                        attrs.emplace_back( game::player1.strafe );
                         attrs.emplace_back( 0 );
-                        loopi(AC_MAX) if(game::player1->action[i] || (abs(game::player1->actiontime[i]) > lastroutetime))
+                        loopi(AC_MAX) if(game::player1.action[i] || (abs(game::player1.actiontime[i]) > lastroutetime))
                             attrs[5] |= (1<<i);
                         int n = newentity(o, int(ROUTE), attrs);
                         if(( 0 <= lastroutenode && lastroutenode < ents.size() )) ents[lastroutenode]->links.emplace_back( n );
                         curnode = lastenttype[ROUTE] = n;
-                        if(game::player1->airmillis) airnodes.emplace_back( n );
+                        if(game::player1.airmillis) airnodes.emplace_back( n );
                     }
-                    if(!game::player1->airmillis && !airnodes.empty()) airnodes.clear();
+                    if(!game::player1.airmillis && !airnodes.empty()) airnodes.clear();
                     if(lastroutenode != curnode) lastroutetime = lastmillis;
                     lastroutenode = curnode;
                 }
@@ -2263,7 +2263,7 @@ namespace entities
             {
                 lastroutenode = -1;
                 lastroutetime = 0;
-                if(game::player1->state == CS_DEAD) for( size_t i = 0; i < airnodes.size(); ++i ) if(( 0 <= airnodes[i] && airnodes[i] < ents.size() )) ents[airnodes[i]]->type = ET_EMPTY;
+                if(game::player1.state == CS_DEAD) for( size_t i = 0; i < airnodes.size(); ++i ) if(( 0 <= airnodes[i] && airnodes[i] < ents.size() )) ents[airnodes[i]]->type = ET_EMPTY;
                 airnodes.clear();
             }
         }
@@ -2271,8 +2271,8 @@ namespace entities
 
     void render()
     {
-        if(rendermainview && shouldshowents(game::player1->state == CS_EDITING ? 1 : (!entgroup.empty() || ( 0 <= enthover && enthover < ents.size() ) ? 2 : 3))) for( size_t i = 0; i < ents.size(); ++i ) // important, don't render lines and stuff otherwise!
-            renderfocus(i, renderentshow(e, i, game::player1->state == CS_EDITING ? ((find( entgroup, i ) >= 0 || enthover == i) ? 1 : 2) : 3));
+        if(rendermainview && shouldshowents(game::player1.state == CS_EDITING ? 1 : (!entgroup.empty() || ( 0 <= enthover && enthover < ents.size() ) ? 2 : 3))) for( size_t i = 0; i < ents.size(); ++i ) // important, don't render lines and stuff otherwise!
+            renderfocus(i, renderentshow(e, i, game::player1.state == CS_EDITING ? ((find( entgroup, i ) >= 0 || enthover == i) ? 1 : 2) : 3));
         if(!drawtex)
         {
             int numents = m_edit(game::gamemode) ? ents.size() : lastuse(EU_ITEM);
@@ -2379,7 +2379,7 @@ namespace entities
 
         vec off(0, 0, 2.f), pos(o);
         if(enttype[e.type].usetype == EU_ITEM) pos.add(off);
-        bool edit = m_edit(game::gamemode) && cansee(idx), isedit = edit && game::player1->state == CS_EDITING,
+        bool edit = m_edit(game::gamemode) && cansee(idx), isedit = edit && game::player1.state == CS_EDITING,
              hasent = isedit && idx >= 0 && (enthover == idx || find( entgroup, idx ) >= 0),
              hastop = hasent && e.o.squaredist(camera1->o) <= showentdist*showentdist;
         int sweap = m_weapon(game::focus->actortype, game::gamemode, game::mutators),

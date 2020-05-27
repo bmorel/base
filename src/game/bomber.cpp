@@ -178,7 +178,7 @@ namespace bomber
                         }
                         if(delay <= carrytime/4) important = true;
                     }
-                    if(game::focus == game::player1)
+                    if(game::focus == &game::player1)
                     {
                         pushfont(important ? "emphasis" : "reduced");
                         ty += draw_textf(important ? "\fs\fzuyPress \fs\fw\f{=affinity}\fS to throw the bomb\fS" : "Press \fs\fw\f{=affinity}\fS to throw the bomb", tx, ty, int(FONTW*hud::noticepadx), int(FONTH*hud::noticepady), tr, tg, tb, int(255*blend), TEXT_CENTERED);
@@ -556,7 +556,7 @@ namespace bomber
         if(!( 0 <= relay && relay < st.flags.size() ) || !( 0 <= goal && goal < st.flags.size() )) return;
         bomberstate::flag &f = st.flags[relay], &g = st.flags[goal];
         string extra = "";
-        if(m_bb_basket(game::gamemode, game::mutators) && showbomberdists >= (d != game::player1 ? 2 : 1))
+        if(m_bb_basket(game::gamemode, game::mutators) && showbomberdists >= (d != &game::player1 ? 2 : 1))
         {
             if(f.droptime) formatstring(extra, " from \fs\fy%.2f\fom\fS", f.droppos.dist(g.spawnloc)/8.f);
             else copystring(extra, " with a \fs\fytouchdown\fS");
@@ -618,7 +618,7 @@ namespace bomber
     {
         gameent *d = NULL;
         int numdyn = game::numdynents();
-        loopj(numdyn) if(((d = (gameent *)game::iterdynents(j))) && d->state == CS_ALIVE && (d == game::player1 || d->ai)) dropaffinity(d);
+        loopj(numdyn) if(((d = (gameent *)game::iterdynents(j))) && d->state == CS_ALIVE && (d == &game::player1 || d->ai)) dropaffinity(d);
         for( size_t i = 0; i < st.flags.size(); ++i )
         {
             bomberstate::flag &f = st.flags[i];
@@ -628,14 +628,14 @@ namespace bomber
                 vec pos = f.pos();
                 f.distance += f.droploc.dist(pos);
                 f.droploc = pos;
-                if(f.lastowner && (f.lastowner == game::player1 || f.lastowner->ai) && f.proj && (!f.movetime || totalmillis-f.movetime >= 40))
+                if(f.lastowner && (f.lastowner == &game::player1 || f.lastowner->ai) && f.proj && (!f.movetime || totalmillis-f.movetime >= 40))
                 {
                     f.inertia = f.proj->vel;
                     f.movetime = totalmillis-(totalmillis%40);
                     client::addmsg(N_MOVEAFFIN, "ri8", f.lastowner->clientnum, i, int(f.droploc.x*DMF), int(f.droploc.y*DMF), int(f.droploc.z*DMF), int(f.inertia.x*DMF), int(f.inertia.y*DMF), int(f.inertia.z*DMF));
                 }
             }
-            loopj(numdyn) if(((d = (gameent *)game::iterdynents(j))) && d->state == CS_ALIVE && (d == game::player1 || d->ai)) checkaffinity(d, i);
+            loopj(numdyn) if(((d = (gameent *)game::iterdynents(j))) && d->state == CS_ALIVE && (d == &game::player1 || d->ai)) checkaffinity(d, i);
         }
     }
 
