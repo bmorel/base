@@ -468,6 +468,31 @@ namespace server
         }
     };
 
+    bool is_player( clientinfo const* ci )
+    {
+        return ci->actortype == A_PLAYER;
+    }
+
+    bool is_alive( clientinfo const* ci )
+    {
+        return ci->state == CS_ALIVE;
+    }
+
+    bool is_dead( clientinfo const* ci )
+    {
+        return !is_alive( ci );
+    }
+
+    bool is_spectator( clientinfo const* ci )
+    {
+        return ci->state == CS_SPECTATOR;
+    }
+
+    bool is_waiting( clientinfo const* ci )
+    {
+        return ci->state == CS_WAITING;
+    }
+
     struct savedscore
     {
         uint ip;

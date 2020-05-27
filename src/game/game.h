@@ -920,6 +920,11 @@ namespace server
     extern void waiting(clientinfo *ci, int drop = 0, bool doteam = true, bool exclude = false);
     extern void setteam(clientinfo *ci, int team, int flags = TT_RESET, bool swaps = true);
     extern int chooseteam(clientinfo *ci, int suggest = -1, bool wantbal = false);
+    extern bool is_player( clientinfo const* ci );
+    extern bool is_alive( clientinfo const* ci );
+    extern bool is_dead( clientinfo const* ci );
+    extern bool is_waiting( clientinfo const* ci );
+    extern bool is_spectator( clientinfo const* ci );
 #endif
 }
 
