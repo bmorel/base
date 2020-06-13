@@ -3399,12 +3399,11 @@ namespace game
             int idx = third == 1 && (d->state == CS_DEAD || d->state == CS_WAITING) && d->headless && !nogore && headlessmodels ? 3 : third;
             if(d->vitems.empty())
             {
-                vector<char *> vanitylist;
+                std::vector<std::string> vanitylist;
                 explodelist(d->vanity, vanitylist);
-                loopv(vanitylist) if(vanitylist[i] && *vanitylist[i])
-                    loopvk(vanities) if(!strcmp(vanities[k].ref, vanitylist[i]))
+                loopv(vanitylist) if(!vanitylist[i].empty())
+                    loopvk(vanities) if(vanitylist[i] == vanities[k].ref)
                         d->vitems.add(k);
-                vanitylist.deletearrays();
             }
             int found[VANITYMAX] = {0};
             loopvk(d->vitems) if(vanities.inrange(d->vitems[k]))
