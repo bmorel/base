@@ -40,7 +40,8 @@ int resolverloop(void * data)
     {
         SDL_LockMutex(resolvermutex);
         while(resolverqueries.empty()) SDL_CondWait(querycond, resolvermutex);
-        rt->query = resolverqueries.back();resolverqueries.pop_back();
+        rt->query = resolverqueries.back();
+        resolverqueries.pop_back();
         rt->starttime = totalmillis;
         SDL_UnlockMutex(resolvermutex);
 
@@ -50,9 +51,7 @@ int resolverloop(void * data)
         SDL_LockMutex(resolvermutex);
         if(rt->query && thread == rt->thread)
         {
-            resolverresult &rr = (resolverresults.emplace_back(  ), resolverresults.back());
-            rr.query = rt->query;
-            rr.address = address;
+            resolverresults.emplace_back( { rt->query, address } );
             rt->query = NULL;
             rt->starttime = 0;
             SDL_CondSignal(resultcond);
@@ -72,7 +71,7 @@ void resolverinit()
     loopi(RESOLVERTHREADS)
     {
         resolverthread &rt = (resolverthreads.emplace_back(  ), resolverthreads.back());
-        rt.query = NULL;
+        rt.query = nullptr;
         rt.starttime = 0;
         rt.thread = SDL_CreateThread(resolverloop, "resolver", &rt);
     }
@@ -114,7 +113,7 @@ void resolverquery(const char *name)
     if(resolverthreads.empty()) resolverinit();
 
     SDL_LockMutex(resolvermutex);
-    (resolverqueries.emplace_back( name ), resolverqueries.back());
+    resolverqueries.emplace_back( name );
     SDL_CondSignal(querycond);
     SDL_UnlockMutex(resolvermutex);
 }
@@ -125,19 +124,23 @@ bool resolvercheck(const char **name, ENetAddress *address)
     SDL_LockMutex(resolvermutex);
     if(!resolverresults.empty())
     {
-        resolverresult &rr = resolverresults.back();resolverresults.pop_back();
+        resolverresult &rr = resolverresults.back();
+        resolverresults.pop_back();
         *name = rr.query;
         address->host = rr.address.host;
         resolved = true;
     }
-    else loopv(resolverthreads)
+    else
     {
-        resolverthread &rt = resolverthreads[i];
-        if(rt.query && totalmillis - rt.starttime > RESOLVERLIMIT)
+        loopv(resolverthreads)
         {
-            resolverstop(rt);
-            *name = rt.query;
-            resolved = true;
+            resolverthread &rt = resolverthreads[i];
+            if(rt.query && totalmillis - rt.starttime > RESOLVERLIMIT)
+            {
+                resolverstop(rt);
+                *name = rt.query;
+                resolved = true;
+            }
         }
     }
     SDL_UnlockMutex(resolvermutex);
@@ -152,21 +155,22 @@ bool resolverwait(const char *name, ENetAddress *address)
     progress(0, text);
 
     SDL_LockMutex(resolvermutex);
-    (resolverqueries.emplace_back( name ), resolverqueries.back());
+    resolverqueries.emplace_back( name );
     SDL_CondSignal(querycond);
     int starttime = SDL_GetTicks(), timeout = 0;
     bool resolved = false;
     for(;;)
     {
         SDL_CondWaitTimeout(resultcond, resolvermutex, 250);
-        loopv(resolverresults) if(resolverresults[i].query == name)
+        auto it = std::find_if( resolverresults.begin(), resolverresults.end(),
+                                [&]( resolverresult const& rr ){ return rr.query == name; } );
+        if( it != resolverresults.end() )
         {
-            address->host = resolverresults[i].address.host;
-            resolverresults.erase( resolverresults.begin() + i );
+            address->host = it->address.host;
+            resolverresults.erase( it );
             resolved = true;
             break;
         }
-        if(resolved) break;
 
         timeout = SDL_GetTicks() - starttime;
         progress(min(float(timeout)/RESOLVERLIMIT, 1.0f), text);
@@ -238,7 +242,7 @@ static serverinfo *newserver(const char *name, int port = SERVER_PORT, int prior
     if(flags && *flags) copystring(si->flags, flags);
     if(branch && *branch) copystring(si->branch, branch, MAXBRANCHLEN+1);
 
-    (servers.emplace_back( si ), servers.back());
+    servers.emplace_back( si );
     sortedservers = false;
 
     return si;
@@ -475,7 +479,7 @@ void retrieveservers(vector<char> &data)
         if(timeout > RETRIEVELIMIT) break;
     }
 
-    if(data.size()) (data.emplace_back( '\0' ), data.back());
+    if(data.size()) data.emplace_back( '\0' );
     enet_socket_destroy(sock);
 }
 
@@ -499,10 +503,9 @@ void updatefrommaster()
     retrieveservers(data);
     if(data.size() && data[0])
     {
-        //clearservers();
         execute(data.data());
         if(verbose) conoutf("\faretrieved %d server(s) from master", servers.size());
-        else conoutf("\faretrieved list from master successfully");//, servers.size());
+        else conoutf("\faretrieved list from master successfully");
     }
     else conoutf("master server not replying");
     refreshservers();
