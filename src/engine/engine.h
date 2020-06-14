@@ -487,7 +487,6 @@ extern bool depthfxing;
 extern void drawdepthfxtex();
 
 // server
-extern void retrieveservers(vector<char> &data);
 extern void localclienttoserver(int chan, ENetPacket *);
 extern void lanconnect();
 extern bool serveroption(char *opt);

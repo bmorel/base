@@ -430,57 +430,84 @@ COMMAND(0, clearservers, "");
 
 #define RETRIEVELIMIT 20000
 
-void retrieveservers(vector<char> &data)
+/**
+ * Send "update\n" to target and return target's reply.
+ *
+ * Can break on timeout, network error or user cancellation (escape key hit).
+ **/
+std::vector<char> retrieveservers( void )
 {
+    std::vector<char> data;
     ENetSocket sock = connectmaster(false);
-    if(sock == ENET_SOCKET_NULL) return;
+    if(sock == ENET_SOCKET_NULL)
+    {
+        return data;
+    }
 
     defformatstring(text, "retrieving servers from %s:[%d]", servermaster, servermasterport);
     progress(0, text);
+    int starttime = SDL_GetTicks();
+    int timeout = 0;
 
-    int starttime = SDL_GetTicks(), timeout = 0;
     const char *req = "update\n";
     int reqlen = strlen(req);
     ENetBuffer buf;
-    while(reqlen > 0)
+    do
     {
         enet_uint32 events = ENET_SOCKET_WAIT_SEND;
-        if(enet_socket_wait(sock, &events, 250) >= 0 && events)
+        if(enet_socket_wait(sock, &events, 250) < 0 || events == 0)
         {
-            buf.data = (void *)req;
-            buf.dataLength = reqlen;
-            int sent = enet_socket_send(sock, NULL, &buf, 1);
-            if(sent < 0) break;
-            req += sent;
-            reqlen -= sent;
-            if(reqlen <= 0) break;
+            break;
         }
+        buf.data = const_cast<char*>( req );
+        buf.dataLength = reqlen;
+        int sent = enet_socket_send(sock, NULL, &buf, 1);
+        if(sent < 0) break;
+        {
+            break;
+        }
+        req += sent;
+        reqlen -= sent;
         timeout = SDL_GetTicks() - starttime;
         progress(min(float(timeout)/RETRIEVELIMIT, 1.0f), text);
-        if(interceptkey(SDLK_ESCAPE)) timeout = RETRIEVELIMIT + 1;
-        if(timeout > RETRIEVELIMIT) break;
-    }
+    } while( reqlen > 0 && !( interceptkey(SDLK_ESCAPE) || timeout > RETRIEVELIMIT ) );
 
-    if(reqlen <= 0) for(;;)
+    if(reqlen <= 0)
     {
-        enet_uint32 events = ENET_SOCKET_WAIT_RECEIVE;
-        if(enet_socket_wait(sock, &events, 250) >= 0 && events)
+        // maximum safe UDP payload is 508 bytes, adding an end 0
+        // so no need to allocate more. In case it's too small, we will
+        // simply loop anyway.
+        char buffer[508];
+        buf = { buffer, sizeof( buffer ) };
+        // read network until end of data or timeout or user cancel
+        do
         {
-            if(data.size() >= data.capacity()) data.resize( data.size() + 4096 );
-            buf.data = data.data() + data.size();
-            buf.dataLength = data.capacity() - data.size();
+            enet_uint32 events = ENET_SOCKET_WAIT_RECEIVE;
+            //a poll(2) encapsulation, that only return -1 on error or 0 if ok
+            if(enet_socket_wait(sock, &events, 250) < 0 || events == 0)
+            {
+                break;
+            }
             int recv = enet_socket_receive(sock, NULL, &buf, 1);
-            if(recv <= 0) break;
-            data.advance(recv);
-        }
-        timeout = SDL_GetTicks() - starttime;
-        progress(min(float(timeout)/RETRIEVELIMIT, 1.0f), text);
-        if(interceptkey(SDLK_ESCAPE)) timeout = RETRIEVELIMIT + 1;
-        if(timeout > RETRIEVELIMIT) break;
+            if(recv <= 0)
+            {
+                break;
+            }
+            data.insert( data.end(), buffer, buffer + buf.dataLength );
+            timeout = SDL_GetTicks() - starttime;
+            progress(min(float(timeout)/RETRIEVELIMIT, 1.0f), text);
+            // I think the interceptkey could be checked after timeout for better
+            // performances, but there might be side effects so let's keep the call
+            // order as it was.
+        } while( !( interceptkey(SDLK_ESCAPE) || timeout > RETRIEVELIMIT ) );
     }
 
-    if(data.size()) data.emplace_back( '\0' );
+    if(data.size())
+    {
+        data.emplace_back( '\0' );
+    }
     enet_socket_destroy(sock);
+    return data;
 }
 
 void sortservers()
@@ -499,8 +526,7 @@ VAR(0, pausesortservers, 0, 0, 1);
 void updatefrommaster()
 {
     pausesortservers = 0;
-    vector<char> data;
-    retrieveservers(data);
+    std::vector<char> data = retrieveservers();
     if(data.size() && data[0])
     {
         execute(data.data());
