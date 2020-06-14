@@ -20,8 +20,8 @@ struct resolverresult
 };
 
 vector<resolverthread> resolverthreads;
-vector<const char *> resolverqueries;
-vector<resolverresult> resolverresults;
+std::vector<const char *> resolverqueries;
+std::vector<resolverresult> resolverresults;
 SDL_mutex *resolvermutex;
 SDL_cond *querycond, *resultcond;
 
@@ -51,7 +51,10 @@ int resolverloop(void * data)
         SDL_LockMutex(resolvermutex);
         if(rt->query && thread == rt->thread)
         {
-            resolverresults.emplace_back( { rt->query, address } );
+            resolverresults.emplace_back();
+            resolverresult &rr = resolverresults.back();
+            rr.query = rt->query;
+            rr.address = address;
             rt->query = NULL;
             rt->starttime = 0;
             SDL_CondSignal(resultcond);
@@ -438,75 +441,117 @@ COMMAND(0, clearservers, "");
 std::vector<char> retrieveservers( void )
 {
     std::vector<char> data;
-    ENetSocket sock = connectmaster(false);
-    if(sock == ENET_SOCKET_NULL)
+    typedef std::vector<char> string_array;
+    typedef std::vector<char*> string_starts;
+
+    // build a list of masters to query
+    // TODO: currently the port needs to be the same for all masters
+    char * master_end = servermaster + strlen( servermaster ) + 1;
+    char * master_start = std::find_if( servermaster, master_end, isgraph );
+    string_array serverlist( master_start, master_end );
+    const string_array::iterator end = serverlist.end();
+    string_starts servers;
+    for( auto it = serverlist.begin(); it != end && *it != '\0'; )
     {
-        return data;
+        servers.emplace_back( &*it );
+        it = std::find( it, end, ' ' );
+        if( it != end )
+        {
+            *it = '\0';
+            ++it;
+        }
     }
 
-    defformatstring(text, "retrieving servers from %s:[%d]", servermaster, servermasterport);
-    progress(0, text);
-    int starttime = SDL_GetTicks();
-    int timeout = 0;
-
-    const char *req = "update\n";
-    int reqlen = strlen(req);
-    ENetBuffer buf;
-    do
+    for( char const* server : servers )
     {
-        enet_uint32 events = ENET_SOCKET_WAIT_SEND;
-        if(enet_socket_wait(sock, &events, 250) < 0 || events == 0)
-        {
-            break;
-        }
-        buf.data = const_cast<char*>( req );
-        buf.dataLength = reqlen;
-        int sent = enet_socket_send(sock, NULL, &buf, 1);
-        if(sent < 0) break;
-        {
-            break;
-        }
-        req += sent;
-        reqlen -= sent;
-        timeout = SDL_GetTicks() - starttime;
-        progress(min(float(timeout)/RETRIEVELIMIT, 1.0f), text);
-    } while( reqlen > 0 && !( interceptkey(SDLK_ESCAPE) || timeout > RETRIEVELIMIT ) );
+        defformatstring(text, "retrieving servers from %s:[%d]", server, servermasterport);
+        progress(0, text);
+        int starttime = SDL_GetTicks();
+        int timeout = 0;
 
-    if(reqlen <= 0)
-    {
-        // maximum safe UDP payload is 508 bytes, adding an end 0
-        // so no need to allocate more. In case it's too small, we will
-        // simply loop anyway.
-        char buffer[508];
-        buf = { buffer, sizeof( buffer ) };
-        // read network until end of data or timeout or user cancel
+        ENetSocket sock = connectmaster(server, servermasterport);
+        if(sock == ENET_SOCKET_NULL)
+        {
+            continue;
+        }
+
+        const char *req = "update\n";
+        int reqlen = strlen(req);
+        ENetBuffer buf;
         do
         {
-            enet_uint32 events = ENET_SOCKET_WAIT_RECEIVE;
-            //a poll(2) encapsulation, that only return -1 on error or 0 if ok
+            enet_uint32 events = ENET_SOCKET_WAIT_SEND;
             if(enet_socket_wait(sock, &events, 250) < 0 || events == 0)
             {
                 break;
             }
-            int recv = enet_socket_receive(sock, NULL, &buf, 1);
-            if(recv <= 0)
+            buf.data = const_cast<char*>( req );
+            buf.dataLength = reqlen;
+            int sent = enet_socket_send(sock, NULL, &buf, 1);
+            if(sent < 0)
             {
                 break;
             }
-            data.insert( data.end(), buffer, buffer + buf.dataLength );
+            req += sent;
+            reqlen -= sent;
             timeout = SDL_GetTicks() - starttime;
             progress(min(float(timeout)/RETRIEVELIMIT, 1.0f), text);
-            // I think the interceptkey could be checked after timeout for better
-            // performances, but there might be side effects so let's keep the call
-            // order as it was.
-        } while( !( interceptkey(SDLK_ESCAPE) || timeout > RETRIEVELIMIT ) );
+        } while( reqlen > 0 && !( interceptkey(SDLK_ESCAPE) || timeout > RETRIEVELIMIT ) );
+
+        if(reqlen <= 0)
+        {
+            // maximum safe UDP payload is 508 bytes, adding an end 0
+            // so no need to allocate more. In case it's too small, we will
+            // simply loop anyway.
+            // TODO: the read loop below seems to be broken. Can't use a more reasonable buffer size.
+            //char buffer[508];
+            char buffer[4096];
+            memset( buffer, 0, sizeof( buffer ) );
+            buf.data = buffer;
+            buf.dataLength = sizeof( buffer );
+            // read network until end of data or timeout or user cancel
+            do
+            {
+                enet_uint32 events = ENET_SOCKET_WAIT_RECEIVE;
+                //a poll(2) encapsulation, that only return -1 on error or 0 if ok
+                if(enet_socket_wait(sock, &events, 250) < 0 || events == 0)
+                {
+                    break;
+                }
+                int recv = enet_socket_receive(sock, NULL, &buf, 1);
+                if(recv <= 0)
+                {
+                    break;
+                }
+                data.insert( data.end(), buffer, buffer + recv );
+                data.emplace_back( '\n' );
+                timeout = SDL_GetTicks() - starttime;
+                progress(min(float(timeout)/RETRIEVELIMIT, 1.0f), text);
+                // I think the interceptkey could be checked after timeout for better
+                // performances, but there might be side effects so let's keep the call
+                // order as it was.
+            } while( !( interceptkey(SDLK_ESCAPE) || timeout > RETRIEVELIMIT ) );
+        }
+        enet_socket_destroy(sock);
+    }
+    char clearservers[] = "clearservers\n";
+    char * end_clear = clearservers + sizeof( clearservers ) - 1;
+    std::vector<char>::iterator data_it = data.begin();
+    std::vector<char>::iterator data_end = data.end();
+    data_it = std::search( data.begin(), data_end,
+                           clearservers, end_clear );
+    ++data_it;
+    while( data.end() != ( data_it = std::search( data_it, data_end,
+                           clearservers, end_clear ) ) )
+    {
+        std::fill( data_it, data_it + ( end_clear - clearservers ), '\n' );
     }
 
     if(data.size())
     {
         data.emplace_back( '\0' );
     }
-    enet_socket_destroy(sock);
+
     return data;
 }
 
