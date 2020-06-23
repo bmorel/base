@@ -1264,6 +1264,18 @@ bool overlapsbox(const vec &d, float h1, float r1, const vec &v, float h2, float
     d.z <= v.z+h2+h1 && d.z >= v.z-h2-h1;
 }
 
+/**
+ * suppositions only:
+ * o: position of the eye
+ * yaw/pitch: direction targeted by the eye
+ * q: object to be able to see
+ * v: intersection at which the look hit the target
+ * mdist: max distance (dunno the unit)
+ * fovx: probably Field of View on x axis, in degrees
+ * fovy: probably Field of View on y axis, in degrees
+ *
+ * return true if {o, yaw, pitch} can see... something?
+ **/
 bool getsight(vec &o, float yaw, float pitch, vec &q, vec &v, float mdist, float fovx, float fovy)
 {
     float dist = o.dist(q);

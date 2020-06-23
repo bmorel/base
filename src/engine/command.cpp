@@ -848,6 +848,22 @@ void setsvarchecked(ident *id, const char *val)
     }
 }
 
+// args is a C string indicating format of arguments.
+// By default, can only contains up to 16 arguments.
+//   * 'i': register an argument, calls compile/set/force[int]
+//   * 'b': register an argument, calls compile/set/force[int] with INT_MIN
+//   * 'f': register an argument, calls compile/set/force[float] with 0.f
+//   * 'g': register an argument, calls compile/set/force[float] with -FLT_MAX
+//   * 't': register an argument, calls compile/set/force[null]/VAL_ANY
+//   * 'N': register an argument, calls compile/set/force[int] with -1
+//   * 's': register an argument, sets "numargs" bit in argmask, calls compile/set/force[str]
+//   * 'e': register an argument, sets "numargs" bit in argmask, calls compile/set/force[block]/VAL_CODE
+//   * 'r': register an argument, sets "numargs" bit in argmask, calls compile/set/force[ident]/VAL_IDENT
+//   * '$': register an argument, sets "numargs" bit in argmask, calls compile/set/force[ident] with id
+//   * '1-4' modifier: go back in parsing string by N+1 bytes, repeat the arg N times?
+//   * 'D': register an argument, calls code.add with CODE_COMD
+//   * 'V': removes the max 16 arg limit, calls code.add with CODE_COMV
+//   * 'C': removes the max 16 arg limit, calls code.add with CODE_COMC
 bool addcommand(const char *name, identfun fun, const char *args, int flags)
 {
     uint argmask = 0;
