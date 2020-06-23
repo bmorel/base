@@ -3434,42 +3434,7 @@ namespace client
         }
         else if(servers.inrange(server))
         {
-            serverinfo *si = servers[server];
-
-            if(prop < 0) intret(4);
-            else switch(prop)
-            {
-                case 0:
-                    if(idx < 0) intret(11);
-                    else switch(idx)
-                    {
-                        case 0: intret(serverstat(si)); break;
-                        case 1: result(si->name); break;
-                        case 2: intret(si->port); break;
-                        case 3: result(si->description()); break;
-                        case 4: result(si->map); break;
-                        case 5: intret(si->numplayers); break;
-                        case 6: intret(si->ping); break;
-                        case 7: intret(si->lastinfo); break;
-                        case 8: result(si->authhandle); break;
-                        case 9: result(si->flags); break;
-                        case 10: result(si->branch); break;
-                        case 11: intret(si->priority); break;
-                    }
-                    break;
-                case 1:
-                    if(idx < 0) intret(si->attr.length());
-                    else if(si->attr.inrange(idx)) intret(si->attr[idx]);
-                    break;
-                case 2:
-                    if(idx < 0) intret(si->players.length());
-                    else if(si->players.inrange(idx)) result(si->players[idx]);
-                    break;
-                case 3:
-                    if(idx < 0) intret(si->handles.length());
-                    else if(si->handles.inrange(idx)) result(si->handles[idx]);
-                    break;
-            }
+            servers[server]->cube_get_property( prop, idx );
         }
     }
     ICOMMAND(0, getserver, "bbb", (int *server, int *prop, int *idx, int *numargs), getservers(*server, *prop, *idx));

@@ -11,6 +11,10 @@ extern int serverdecay;
 extern int lastreset;
 
 extern bool filterstring(char *dst, const char *src, bool newline, bool colour, bool whitespace, bool wsstrip, size_t len);
+namespace client
+{
+    extern int serverstat( serverinfo* );
+}
 
 struct serverinfo
 {
@@ -22,26 +26,26 @@ struct serverinfo
     enum { UNRESOLVED = 0, RESOLVING, RESOLVED };
 
 private:
-    int lastping;
-    int nextping;
-    int pings[MAXPINGS];
     string sdesc;
-public:
-    ENetAddress address;
     string flags;
     string branch;
     string authhandle;
+    vector<char *> players;
+    vector<char *> handles;
+    int lastping;
+    int nextping;
+    int pings[MAXPINGS];
+    int lastinfo;
+public:
+    ENetAddress address;
     string name;
     string map;
     vector<int> attr;
-    vector<char *> players;
-    vector<char *> handles;
     int ping;
     int resolved;
     int numplayers;
     int priority;
     int port;
-    int lastinfo;
 
 public:
     serverinfo(uint ip, int port, int priority = 0);
@@ -64,6 +68,7 @@ public:
     static serverinfo *newserver(const char *name, int port = SERVER_PORT, int priority = 0, const char *desc = nullptr, const char *handle = nullptr, const char *flags = nullptr, const char *branch = nullptr, uint ip = ENET_HOST_ANY);
     void writecfg( stream& file ) const;
     void update( size_t len, void const* data );
+    void cube_get_property( int property, int index );
 };
 
 #endif

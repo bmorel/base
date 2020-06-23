@@ -130,3 +130,41 @@ void serverinfo::update( size_t len, void const* data )
     }
     sortedservers = false;
 }
+
+void serverinfo::cube_get_property( int prop, int idx )
+{
+    if(prop < 0) intret(4);
+    else switch(prop)
+    {
+        case 0:
+            if(idx < 0) intret(11);
+            else switch(idx)
+            {
+                case 0: intret(client::serverstat(this)); break;
+                case 1: result(name); break;
+                case 2: intret(port); break;
+                case 3: result(description()); break;
+                case 4: result(map); break;
+                case 5: intret(numplayers); break;
+                case 6: intret(ping); break;
+                case 7: intret(lastinfo); break;
+                case 8: result(authhandle); break;
+                case 9: result(flags); break;
+                case 10: result(branch); break;
+                case 11: intret(priority); break;
+            }
+            break;
+        case 1:
+            if(idx < 0) intret(attr.length());
+            else if(attr.inrange(idx)) intret(attr[idx]);
+            break;
+        case 2:
+            if(idx < 0) intret(players.length());
+            else if(players.inrange(idx)) result(players[idx]);
+            break;
+        case 3:
+            if(idx < 0) intret(handles.length());
+            else if(handles.inrange(idx)) result(handles[idx]);
+            break;
+    }
+}
