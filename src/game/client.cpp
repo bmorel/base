@@ -3,6 +3,7 @@
 #include <algorithm>
 using std::swap;
 #include "game.h"
+#include "serverinfo.hpp"
 
 namespace client
 {

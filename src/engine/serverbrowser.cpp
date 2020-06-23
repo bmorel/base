@@ -4,6 +4,7 @@ using std::swap;
 
 #include "engine.h"
 #include "SDL_thread.h"
+#include "serverinfo.hpp"
 
 struct resolverthread
 {

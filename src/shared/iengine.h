@@ -464,76 +464,7 @@ extern void trytofindocta(bool fallback = true);
 extern void setlocations(bool wanthome = true);
 
 // client
-struct serverinfo
-{
-    enum
-    {
-        MAXPINGS = 3,
-        WAITING = INT_MAX
-    };
-    enum { UNRESOLVED = 0, RESOLVING, RESOLVED };
-
-    string name, map, sdesc, authhandle, flags, branch;
-    int numplayers, lastping, lastinfo, nextping, ping, resolved, port, priority;
-    int pings[MAXPINGS];
-    vector<int> attr;
-    vector<char *> players, handles;
-    ENetAddress address;
-
-    serverinfo(uint ip, int port, int priority = 0)
-     : numplayers(0), resolved(ip==ENET_HOST_ANY ? UNRESOLVED : RESOLVED), port(port), priority(priority)
-    {
-        name[0] = map[0] = sdesc[0] = authhandle[0] = flags[0] = branch[0] = '\0';
-        address.host = ip;
-        address.port = port+1;
-        clearpings();
-    }
-    ~serverinfo() { cleanup(); }
-
-    void clearpings()
-    {
-        ping = WAITING;
-        loopk(MAXPINGS) pings[k] = WAITING;
-        nextping = 0;
-        lastping = lastinfo = -1;
-    }
-
-    void cleanup()
-    {
-        clearpings();
-        attr.setsize(0);
-        players.deletearrays();
-        handles.deletearrays();
-        numplayers = 0;
-    }
-
-    void reset()
-    {
-        lastping = lastinfo = -1;
-    }
-
-    void checkdecay(int decay)
-    {
-        if(lastping >= 0 && totalmillis - lastping >= decay)
-            cleanup();
-        if(lastping < 0) lastping = totalmillis ? totalmillis : 1;
-    }
-
-    void calcping()
-    {
-        int numpings = 0, totalpings = 0;
-        loopk(MAXPINGS) if(pings[k] != WAITING) { totalpings += pings[k]; numpings++; }
-        ping = numpings ? totalpings/numpings : WAITING;
-    }
-
-    void addping(int rtt, int millis)
-    {
-        if(millis >= lastping) lastping = -1;
-        pings[nextping] = rtt;
-        nextping = (nextping+1)%MAXPINGS;
-        calcping();
-    }
-};
+struct serverinfo;
 
 extern vector<serverinfo *> servers;
 
