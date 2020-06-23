@@ -3,6 +3,7 @@ using std::swap;
 #include "game.h"
 namespace ai
 {
+    bool cansee(gameent *, vec &, vec &, bool force = false, vec &targ = aitarget );
     avoidset obstacles, wpavoid;
     int avoidmillis = 0, iteration = -1, itermillis = 0, itercount = 0;
     vec aitarget(0, 0, 0);

@@ -226,7 +226,12 @@ namespace ai
     {
         vector<aistate> state;
         vector<int> route;
-        vec target, spot, views, aimrnd;
+        // for views:
+        // 0: Field of View on x axis, in degree
+        // 1: Field of View on y axis, in degree
+        // 2: maximum distance, unknown unit
+        vec views;
+        vec target, spot, aimrnd;
         int enemy, enemyseen, enemymillis, prevnodes[NUMPREVNODES], targnode, targlast, targtime, targseq,
             lastrun, lastaction, lastcheck, jumpseed, jumprand, blocktime, blockseq, lastaimrnd, lastmelee, lastturn;
         float targyaw, targpitch;
@@ -330,7 +335,6 @@ namespace ai
     extern float viewfieldy(int x = 101);
 
     extern bool targetable(gameent *d, gameent *e, bool solid = false);
-    extern bool cansee(gameent *d, vec &x, vec &y, bool force = false, vec &targ = aitarget);
     extern bool altfire(gameent *d, gameent *e);
     extern int weappref(gameent *d);
 

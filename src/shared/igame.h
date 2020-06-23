@@ -11,7 +11,7 @@ namespace entities
     extern void initents(int mtype, int mver, char *gid, int gver);
     extern float dropheight(extentity &e);
     extern void fixentity(int n, bool recurse = true, bool create = false);
-    extern bool cansee(int n);
+    extern bool cansee(int n); //only used in physics.cpp
     extern const char *findname(int type);
     extern int findtype(char *type);
     extern bool maylink(int type, int ver = 0);
