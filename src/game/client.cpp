@@ -3271,29 +3271,16 @@ namespace client
 
     int servercompare(serverinfo *a, serverinfo *b)
     {
-        int ac = 0, bc = 0;
-        if(a->address.host == ENET_HOST_ANY || a->ping >= serverinfo::WAITING || a->attr.empty()) ac = -1;
-        else ac = a->attr[0] == VERSION_GAME ? 0x7FFF : clamp(a->attr[0], 0, 0x7FFF-1);
-        if(b->address.host == ENET_HOST_ANY || b->ping >= serverinfo::WAITING || b->attr.empty()) bc = -1;
-        else bc = b->attr[0] == VERSION_GAME ? 0x7FFF : clamp(b->attr[0], 0, 0x7FFF-1);
-        if(ac > bc) return -1;
-        if(ac < bc) return 1;
-
-        #define retcp(c) { int cv = (c); if(cv) { return reverse ? -cv : cv; } }
-        #define retsw(c,d,e) { \
-            int cv = (c), dv = (d); \
-            if(cv != dv) \
-            { \
-                if((e) != reverse ? cv < dv : cv > dv) return -1; \
-                if((e) != reverse ? cv > dv : cv < dv) return 1; \
-            } \
+        int comp = a->version_compare( *b );
+        if( comp != 0 )
+        {
+            return comp;
         }
 
         if(serversortstyles.empty()) updateserversort();
         loopv(serversortstyles)
         {
             int style = serversortstyles[i];
-            serverinfo *aa = a, *ab = b;
             bool reverse = false;
             if(style < 0)
             {
@@ -3301,83 +3288,8 @@ namespace client
                 reverse = true;
             }
 
-            switch(style)
-            {
-                case SINFO_STATUS:
-                {
-                    retsw(serverstat(aa), serverstat(ab), true);
-                    break;
-                }
-                case SINFO_DESC:
-                {
-                    retcp(strcmp(aa->description(), ab->description()));
-                    break;
-                }
-                case SINFO_MODE:
-                {
-                    if(aa->attr.length() > 1) ac = aa->attr[1];
-                    else ac = 0;
-
-                    if(ab->attr.length() > 1) bc = ab->attr[1];
-                    else bc = 0;
-
-                    retsw(ac, bc, true);
-                }
-                case SINFO_MUTS:
-                {
-                    if(aa->attr.length() > 2) ac = aa->attr[2];
-                    else ac = 0;
-
-                    if(ab->attr.length() > 2) bc = ab->attr[2];
-                    else bc = 0;
-
-                    retsw(ac, bc, true);
-                    break;
-                }
-                case SINFO_MAP:
-                {
-                    retcp(strcmp(aa->map, ab->map));
-                    break;
-                }
-                case SINFO_TIME:
-                {
-                    if(aa->attr.length() > 3) ac = aa->attr[3];
-                    else ac = 0;
-
-                    if(ab->attr.length() > 3) bc = ab->attr[3];
-                    else bc = 0;
-
-                    retsw(ac, bc, false);
-                    break;
-                }
-                case SINFO_NUMPLRS:
-                {
-                    retsw(aa->numplayers, ab->numplayers, false);
-                    break;
-                }
-                case SINFO_MAXPLRS:
-                {
-                    if(aa->attr.length() > 4) ac = aa->attr[4];
-                    else ac = 0;
-
-                    if(ab->attr.length() > 4) bc = ab->attr[4];
-                    else bc = 0;
-
-                    retsw(ac, bc, false);
-                    break;
-                }
-                case SINFO_PING:
-                {
-                    retsw(aa->ping, ab->ping, true);
-                    break;
-                }
-                case SINFO_PRIO:
-                {
-                    retsw(aa->priority, ab->priority, false);
-                    break;
-                }
-                default: break;
-            }
+            comp = a->compare(*b, style, reverse);
+            if( comp != 0 ) return comp;
         }
         return strcmp( a->name(), b->name() );
     }

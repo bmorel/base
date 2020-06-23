@@ -183,3 +183,76 @@ char const* serverinfo::name( void ) const
 {
     return m_name;
 }
+
+int serverinfo::compare( serverinfo const& other, int style, bool reverse ) const
+{
+    int ac = 0, bc = 0;
+    int index = 0;
+    int comp  = 0;
+    switch(style)
+    {
+        case SINFO_DESC:
+            if( ( comp = strcmp(sdesc, other.sdesc) ) ) { return reverse ? 0 - comp: comp ; }
+            return 0;
+        case SINFO_MAP:
+            if( ( comp = strcmp(map, other.map) ) ) { return reverse ? 0 - comp : comp; }
+            return 0;
+        case SINFO_MODE:
+            index = 1;
+            ac =       attr.size() > index ?       attr[index] : 0;
+            bc = other.attr.size() > index ? other.attr[index] : 0;
+        case SINFO_MUTS:
+            index = 2;
+            ac =       attr.size() > index ?       attr[index] : 0;
+            bc = other.attr.size() > index ? other.attr[index] : 0;
+            break;
+        case SINFO_TIME:
+            index = 3;
+            ac =       attr.size() > index ?       attr[index] : 0;
+            bc = other.attr.size() > index ? other.attr[index] : 0;
+            break;
+        case SINFO_MAXPLRS:
+            index = 4;
+            ac =       attr.size() > index ?       attr[index] : 0;
+            bc = other.attr.size() > index ? other.attr[index] : 0;
+            break;
+        case SINFO_STATUS:
+            ac = client::serverstat( const_cast<serverinfo*>( this ) );
+            bc = client::serverstat( const_cast<serverinfo*>( &other ) );
+            break;
+        case SINFO_NUMPLRS:
+            ac = numplayers;
+            bc = other.numplayers;
+            break;
+        case SINFO_PING:
+            ac = ping;
+            bc = other.ping;
+            break;
+        case SINFO_PRIO:
+            ac = priority;
+            bc = other.priority;
+            break;
+        default:
+            return 0;
+    }
+
+    if( ac != bc )
+    {
+        bool higher_is_better = style != SINFO_NUMPLRS && style != SINFO_PRIO;
+        if( higher_is_better != reverse ? ac < bc : ac > bc ) return -1;
+        if( higher_is_better != reverse ? ac > bc : ac < bc ) return  1;
+    }
+    return 0;
+}
+
+int serverinfo::version_compare( serverinfo const& other ) const
+{
+    int ac = 0, bc = 0;
+    ac = address.host == ENET_HOST_ANY || ping >= serverinfo::WAITING || attr.empty() ? -1 : attr[0] == VERSION_GAME ? 0x7FFF : clamp(attr[0], 0, 0x7FFF-1);
+
+    bc = other.address.host == ENET_HOST_ANY || other.ping >= serverinfo::WAITING || other.attr.empty() ? -1 : other.attr[0] == VERSION_GAME ? 0x7FFF : clamp(other.attr[0], 0, 0x7FFF-1);
+
+    if(ac > bc) return -1;
+    if(ac < bc) return  1;
+    return 0;
+}
