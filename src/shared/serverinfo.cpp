@@ -5,6 +5,7 @@
 #include <GL/gl.h>
 
 #include "tools.h"
+#include "command.h"
 #include "serverinfo.hpp"
 
 serverinfo::serverinfo(uint ip, int port, int priority)
@@ -66,9 +67,9 @@ const char* serverinfo::description( void ) const
     return sdesc[0] ? sdesc : name;
 }
 
-char* serverinfo::description( void )
+void serverinfo::writecfg( stream& file ) const
 {
-    return sdesc;
+    file.printf("addserver %s %d %d %s %s %s %s\n", name, port, priority, escapestring(description()), escapestring(authhandle), escapestring(flags), escapestring(branch));
 }
 
 serverinfo *serverinfo::newserver(const char *name, int port, int priority, const char *desc, const char *handle, const char *flags, const char *branch, uint ip)
@@ -92,3 +93,40 @@ serverinfo *serverinfo::newserver(const char *name, int port, int priority, cons
     return si;
 }
 
+void serverinfo::update( size_t len, void const* data )
+{
+    char text[MAXTRANS];
+    ucharbuf p(static_cast<unsigned char*>( const_cast<void*>( data ) ), len);
+    int millis = getint(p), rtt = clamp(totalmillis - millis, 0, min(serverdecay*1000, totalmillis));
+    if(millis >= lastreset && rtt < serverdecay*1000) addping(rtt, millis);
+    lastinfo = totalmillis;
+    numplayers = getint(p);
+    int numattr = getint(p);
+    attr.clear();
+    loopj(numattr) attr.add(getint(p));
+    int gver = attr.empty() ? 0 : attr[0];
+    getstring(text, p);
+    filterstring(map, text, false, true, true, false, sizeof( map ));
+    getstring(text, p);
+    filterstring(sdesc, text, true, true, true, false, MAXSDESCLEN+1);
+    players.clear();
+    handles.clear();
+    if(gver >= 227)
+    {
+        getstring(text, p);
+        filterstring(branch, text, true, true, true, false, MAXBRANCHLEN+1);
+    }
+    loopi(numplayers)
+    {
+        if(p.overread()) break;
+        getstring(text, p);
+        players.add(newstring(text));
+    }
+    if(gver >= 225) loopi(numplayers)
+    {
+        if(p.overread()) break;
+        getstring(text, p);
+        handles.add(newstring(text));
+    }
+    sortedservers = false;
+}

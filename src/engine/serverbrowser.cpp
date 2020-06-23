@@ -3,6 +3,7 @@
 using std::swap;
 
 #include "engine.h"
+#include "iengine.h"
 #include "SDL_thread.h"
 #include "serverinfo.hpp"
 
@@ -317,7 +318,7 @@ void checkresolver()
     }
 }
 
-static int lastreset = 0;
+int lastreset = 0;
 
 void checkpings()
 {
@@ -326,7 +327,6 @@ void checkpings()
     ENetBuffer buf;
     ENetAddress addr;
     uchar ping[MAXTRANS];
-    char text[MAXTRANS];
     buf.data = ping;
     buf.dataLength = sizeof(ping);
     while(enet_socket_wait(pingsock, &events, 0) >= 0 && events)
@@ -337,38 +337,7 @@ void checkpings()
         loopv(servers) if(addr.host == servers[i]->address.host && addr.port == servers[i]->address.port) { si = servers[i]; break; }
         if(!si && searchlan) si = serverinfo::newserver(NULL, addr.port-1, 1, NULL, NULL, NULL, NULL, addr.host);
         if(!si) continue;
-        ucharbuf p(ping, len);
-        int millis = getint(p), rtt = clamp(totalmillis - millis, 0, min(serverdecay*1000, totalmillis));
-        if(millis >= lastreset && rtt < serverdecay*1000) si->addping(rtt, millis);
-        si->lastinfo = totalmillis;
-        si->numplayers = getint(p);
-        int numattr = getint(p);
-        si->attr.shrink(0);
-        loopj(numattr) si->attr.add(getint(p));
-        int gver = si->attr.empty() ? 0 : si->attr[0];
-        getstring(text, p);
-        filterstring(si->map, text, false);
-        getstring(text, p);
-        filterstring(si->description(), text, true, true, true, false, MAXSDESCLEN+1);
-        si->players.deletearrays();
-        si->handles.deletearrays();
-        if(gver >= 227)
-        {
-            getstring(text, p);
-            filterstring(si->branch, text, true, true, true, false, MAXBRANCHLEN+1);
-        }
-        loopi(si->numplayers)
-        {
-            if(p.overread()) break;
-            getstring(text, p);
-            si->players.add(newstring(text));
-        }
-        if(gver >= 225) loopi(si->numplayers)
-        {
-            if(p.overread()) break;
-            getstring(text, p);
-            si->handles.add(newstring(text));
-        }
+        si->update( buf.dataLength, buf.data );
         sortedservers = false;
     }
 }
@@ -506,8 +475,7 @@ void writeservercfg()
     f->printf("// servers which are connected to or queried get added here automatically\n\n");
     loopv(servers)
     {
-        serverinfo *s = servers[i];
-        f->printf("addserver %s %d %d %s %s %s %s\n", s->name, s->port, s->priority, escapestring(s->description()), escapestring(s->authhandle), escapestring(s->flags), escapestring(s->branch));
+        servers[i]->writecfg( *f );
     }
     delete f;
 }

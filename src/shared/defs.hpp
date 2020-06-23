@@ -4,5 +4,6 @@
 #define SERVER_PORT 28801
 #define MAXSDESCLEN 80
 #define MAXBRANCHLEN 16
+#define MAXTRANS 5000   // max amount of data to swallow in 1 go
 
 #endif

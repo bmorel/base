@@ -7,6 +7,10 @@ struct serverinfo;
 extern int totalmillis;
 extern bool sortedservers;
 extern vector<serverinfo*> servers;
+extern int serverdecay;
+extern int lastreset;
+
+extern bool filterstring(char *dst, const char *src, bool newline, bool colour, bool whitespace, bool wsstrip, size_t len);
 
 struct serverinfo
 {
@@ -55,10 +59,11 @@ public:
 
     void addping(int rtt, int millis);
 
-    const char* description( void ) const;
-    char* description( void ); //TODO: remove me (used only by filterstring in serverbrowser.cpp)
+    const char* description( void ) const;//only used at game/client.cpp:L: 38 57 3440
 
     static serverinfo *newserver(const char *name, int port = SERVER_PORT, int priority = 0, const char *desc = nullptr, const char *handle = nullptr, const char *flags = nullptr, const char *branch = nullptr, uint ip = ENET_HOST_ANY);
+    void writecfg( stream& file ) const;
+    void update( size_t len, void const* data );
 };
 
 #endif
