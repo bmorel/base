@@ -3246,7 +3246,7 @@ namespace client
 
     int serverstat(serverinfo *a)
     {
-        if(a->attr.length() > 4 && a->numplayers >= a->attr[4])
+        if(a->server_full())
         {
             return SSTAT_FULL;
         }

@@ -42,11 +42,11 @@ private:
     int priority;
     string map;
     int ping;
+    int numplayers;
 public:
     ENetAddress address;
     vector<int> attr;
     int resolved;
-    int numplayers;
 
 public:
     serverinfo(uint ip, int port, int priority = 0);
@@ -76,6 +76,7 @@ public:
     static bool server_compatible( serverinfo* );
     int compare( serverinfo const& other, int style, bool reverse ) const;
     int version_compare( serverinfo const& other ) const;
+    bool server_full( void ) const;
 };
 
 #endif

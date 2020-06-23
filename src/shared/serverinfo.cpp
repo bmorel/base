@@ -256,3 +256,8 @@ int serverinfo::version_compare( serverinfo const& other ) const
     if(ac < bc) return  1;
     return 0;
 }
+
+bool serverinfo::server_full( void ) const
+{
+    return attr.size() > 4 && numplayers >= attr[4];
+}
