@@ -3379,7 +3379,7 @@ namespace client
                 default: break;
             }
         }
-        return strcmp(a->name, b->name);
+        return strcmp( a->name(), b->name() );
     }
 
     void parsepacketclient(int chan, packetbuf &p)  // processes any updates from the server

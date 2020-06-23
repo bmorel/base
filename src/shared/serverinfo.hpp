@@ -30,22 +30,23 @@ private:
     string flags;
     string branch;
     string authhandle;
+    string m_name;
     vector<char *> players;
     vector<char *> handles;
     int lastping;
     int nextping;
     int pings[MAXPINGS];
     int lastinfo;
+    int port;
 public:
     ENetAddress address;
-    string name;
+public:
     string map;
     vector<int> attr;
     int ping;
     int resolved;
     int numplayers;
     int priority;
-    int port;
 
 public:
     serverinfo(uint ip, int port, int priority = 0);
@@ -69,6 +70,10 @@ public:
     void writecfg( stream& file ) const;
     void update( size_t len, void const* data );
     void cube_get_property( int property, int index );
+    bool same_name( char const* other ) const;
+    bool is_same( char const* oname, int oport ) const;
+    char const* name( void ) const; //only used by resolverquery in serverbrowser.cpp and servercompare()
+    static bool server_compatible( serverinfo* );
 };
 
 #endif

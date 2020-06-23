@@ -11,7 +11,7 @@
 serverinfo::serverinfo(uint ip, int port, int priority)
  : numplayers(0), resolved(ip==ENET_HOST_ANY ? UNRESOLVED : RESOLVED), port(port), priority(priority)
 {
-    name[0] = map[0] = sdesc[0] = authhandle[0] = flags[0] = branch[0] = '\0';
+    m_name[0] = map[0] = sdesc[0] = authhandle[0] = flags[0] = branch[0] = '\0';
     address.host = ip;
     address.port = port+1;
     clearpings();
@@ -64,20 +64,20 @@ void serverinfo::addping(int rtt, int millis)
 
 const char* serverinfo::description( void ) const
 {
-    return sdesc[0] ? sdesc : name;
+    return sdesc[0] ? sdesc : m_name;
 }
 
 void serverinfo::writecfg( stream& file ) const
 {
-    file.printf("addserver %s %d %d %s %s %s %s\n", name, port, priority, escapestring(description()), escapestring(authhandle), escapestring(flags), escapestring(branch));
+    file.printf("addserver %s %d %d %s %s %s %s\n", m_name, port, priority, escapestring(description()), escapestring(authhandle), escapestring(flags), escapestring(branch));
 }
 
 serverinfo *serverinfo::newserver(const char *name, int port, int priority, const char *desc, const char *handle, const char *flags, const char *branch, uint ip)
 {
     serverinfo *si = new serverinfo(ip, port, priority);
 
-    if(name) copystring(si->name, name);
-    else if(ip == ENET_HOST_ANY || enet_address_get_host_ip(&si->address, si->name, sizeof(si->name)) < 0)
+    if(name) copystring(si->m_name, name);
+    else if(ip == ENET_HOST_ANY || enet_address_get_host_ip(&si->address, si->m_name, sizeof(si->m_name)) < 0)
     {
         delete si;
         return NULL;
@@ -141,7 +141,7 @@ void serverinfo::cube_get_property( int prop, int idx )
             else switch(idx)
             {
                 case 0: intret(client::serverstat(this)); break;
-                case 1: result(name); break;
+                case 1: result(m_name); break;
                 case 2: intret(port); break;
                 case 3: result(description()); break;
                 case 4: result(map); break;
@@ -167,4 +167,19 @@ void serverinfo::cube_get_property( int prop, int idx )
             else if(handles.inrange(idx)) result(handles[idx]);
             break;
     }
+}
+
+bool serverinfo::same_name( char const* oname ) const
+{
+    return 0 == strcmp( m_name, oname );
+}
+
+bool serverinfo::is_same( char const* oname, int oport ) const
+{
+    return 0 == strcmp( m_name, oname ) && port == oport;
+}
+
+char const* serverinfo::name( void ) const
+{
+    return m_name;
 }

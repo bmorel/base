@@ -226,7 +226,7 @@ int lastinfo = 0;
 
 void addserver(const char *name, int port, int priority, const char *desc, const char *handle, const char *flags, const char *branch)
 {
-    loopv(servers) if(!strcmp(servers[i]->name, name) && servers[i]->port == port) return;
+    loopv(servers) if( servers[i]->is_same( name, port ) ) return;
     if(serverinfo::newserver(name, port, priority, desc, handle, flags, branch) && verbose >= 2)
         conoutf("added server %s (%d) [%s]", name, port, desc);
 }
@@ -294,7 +294,7 @@ void checkresolver()
         if(si.resolved == serverinfo::RESOLVED) continue;
         if(si.address.host == ENET_HOST_ANY)
         {
-            if(si.resolved == serverinfo::UNRESOLVED) { si.resolved = serverinfo::RESOLVING; resolverquery(si.name); }
+            if(si.resolved == serverinfo::UNRESOLVED) { si.resolved = serverinfo::RESOLVING; resolverquery(si.name()); }
             resolving++;
         }
     }
@@ -308,7 +308,7 @@ void checkresolver()
         loopv(servers)
         {
             serverinfo &si = *servers[i];
-            if(name == si.name)
+            if( name == si.name() )
             {
                 si.resolved = serverinfo::RESOLVED;
                 si.address.host = addr.host;
