@@ -254,10 +254,12 @@ void pingservers()
         enet_socket_set_option(pingsock, ENET_SOCKOPT_NONBLOCK, 1);
         enet_socket_set_option(pingsock, ENET_SOCKOPT_BROADCAST, 1);
     }
+    int tmp_millis = totalmillis;
     uchar ping[MAXTRANS];
     ENetBuffer buf = { ping, 0 };
     ucharbuf p(ping, sizeof(ping));
     putint(p, totalmillis ? totalmillis : 1);
+    buf.dataLength = p.length();
 
     static int lastping = 0;
     auto num_servers = servers.size();
@@ -265,15 +267,7 @@ void pingservers()
     loopi(maxservpings ? min(num_servers, maxservpings) : num_servers)
     {
         if(++lastping >= num_servers) lastping = 0;
-        serverinfo &si = *servers[lastping];
-        if(si.address()->host == ENET_HOST_ANY)
-        {
-            continue;
-        }
-        buf.dataLength = p.length();
-        enet_socket_send(pingsock, si.address(), &buf, 1);
-
-        si.checkdecay(serverdecay*1000);
+        servers[lastping]->ping( pingsock, tmp_millis );
     }
 
     if(searchlan && serverlanport)
@@ -281,7 +275,6 @@ void pingservers()
         ENetAddress address;
         address.host = ENET_HOST_BROADCAST;
         address.port = serverlanport;
-        buf.dataLength = p.length();
         enet_socket_send(pingsock, &address, &buf, 1);
     }
     lastinfo = totalmillis;

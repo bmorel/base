@@ -28,7 +28,7 @@ struct serverinfo
     enum
     {
         MAXPINGS = 3,
-        WAITING = INT_MAX
+        WAITING = INT_MAX //only used in serverbrowser for cs exposition
     };
 
 private:
@@ -48,7 +48,7 @@ private:
     int lastinfo;
     int port;
     int priority;
-    int ping;
+    int m_ping;
     int numplayers;
     enum
     {
@@ -61,6 +61,7 @@ private:
     void clearpings();
     void cleanup();
     void addping(int rtt, int millis);
+    ENetAddress const* address( void ) const;
 public:
     serverinfo(uint ip, int port, int priority = 0);
     ~serverinfo();
@@ -74,12 +75,11 @@ public:
     server_status server_status( void ) const;
     void writecfg( stream& file ) const;
     void update( size_t len, void const* data );
-    void checkdecay(int decay);
     bool validate_resolve( char const* name, ENetAddress const& addr );
     bool need_resolve( int& resolving );
-    ENetAddress const* address( void ) const;
     bool is_same( ENetAddress const& addr ) const;
     bool is_same( char const* oname, int oport ) const;
+    void ping( ENetSocket& sock, int millis );
 
     static serverinfo *newserver(const char *name, int port = SERVER_PORT, int priority = 0, const char *desc = nullptr, const char *handle = nullptr, const char *flags = nullptr, const char *branch = nullptr, uint ip = ENET_HOST_ANY);
     static bool server_compatible( serverinfo const* );

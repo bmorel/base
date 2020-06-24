@@ -20,7 +20,7 @@ serverinfo::~serverinfo() { cleanup(); }
 
 void serverinfo::clearpings()
 {
-    ping = WAITING;
+    m_ping = WAITING;
     loopk(MAXPINGS) pings[k] = WAITING;
     nextping = 0;
     lastping = lastinfo = -1;
@@ -40,13 +40,6 @@ void serverinfo::reset()
     lastping = lastinfo = -1;
 }
 
-void serverinfo::checkdecay(int decay)
-{
-    if(lastping >= 0 && totalmillis - lastping >= decay)
-        cleanup();
-    if(lastping < 0) lastping = totalmillis ? totalmillis : 1;
-}
-
 void serverinfo::addping(int rtt, int millis)
 {
     if(millis >= lastping) lastping = -1;
@@ -54,7 +47,7 @@ void serverinfo::addping(int rtt, int millis)
     nextping = (nextping+1)%MAXPINGS;
     int numpings = 0, totalpings = 0;
     loopk(MAXPINGS) if(pings[k] != WAITING) { totalpings += pings[k]; numpings++; }
-    ping = numpings ? totalpings/numpings : WAITING;
+    m_ping = numpings ? totalpings/numpings : WAITING;
 }
 
 const char* serverinfo::description( void ) const
@@ -141,7 +134,7 @@ void serverinfo::cube_get_property( int prop, int idx )
                 case 3: result(description()); break;
                 case 4: result(map); break;
                 case 5: intret(numplayers); break;
-                case 6: intret(ping); break;
+                case 6: intret(m_ping); break;
                 case 7: intret(lastinfo); break;
                 case 8: result(authhandle); break;
                 case 9: result(flags); break;
@@ -212,8 +205,8 @@ int serverinfo::compare( serverinfo const& other, int style, bool reverse ) cons
             bc = other.numplayers;
             break;
         case SINFO_PING:
-            ac = ping;
-            bc = other.ping;
+            ac = m_ping;
+            bc = other.m_ping;
             break;
         case SINFO_PRIO:
             ac = priority;
@@ -240,9 +233,9 @@ int serverinfo::compare( serverinfo const& other, int style, bool reverse ) cons
 int serverinfo::version_compare( serverinfo const& other ) const
 {
     int ac = 0, bc = 0;
-    ac = m_address.host == ENET_HOST_ANY || ping >= serverinfo::WAITING || attr.empty() ? -1 : attr[0] == VERSION_GAME ? 0x7FFF : clamp(attr[0], 0, 0x7FFF-1);
+    ac = m_address.host == ENET_HOST_ANY || m_ping >= serverinfo::WAITING || attr.empty() ? -1 : attr[0] == VERSION_GAME ? 0x7FFF : clamp(attr[0], 0, 0x7FFF-1);
 
-    bc = other.m_address.host == ENET_HOST_ANY || other.ping >= serverinfo::WAITING || other.attr.empty() ? -1 : other.attr[0] == VERSION_GAME ? 0x7FFF : clamp(other.attr[0], 0, 0x7FFF-1);
+    bc = other.m_address.host == ENET_HOST_ANY || other.m_ping >= serverinfo::WAITING || other.attr.empty() ? -1 : other.attr[0] == VERSION_GAME ? 0x7FFF : clamp(other.attr[0], 0, 0x7FFF-1);
 
     if(ac > bc) return -1;
     if(ac < bc) return  1;
@@ -309,4 +302,22 @@ bool serverinfo::need_resolve( int& resolving )
 ENetAddress const* serverinfo::address( void ) const
 {
     return &m_address;
+}
+
+void serverinfo::ping( ENetSocket& sock, int millis )
+{
+    if( m_address.host == ENET_HOST_ANY )
+    {
+      return;
+    }
+
+    //should be more than enouhg to store a "compressed" int
+    uchar ping[12];
+    ucharbuf ubuf( ping, sizeof( ping ) );
+    putint( ubuf, millis ? millis : 1 );
+    ENetBuffer buf = { ping, static_cast<size_t>( ubuf.length() ) };
+    enet_socket_send( sock, &m_address, &buf, 1 );
+    if(lastping >= 0 && millis - lastping >= serverdecay * 1000)
+        cleanup();
+    if(lastping < 0) lastping = millis ? millis : 1;
 }
