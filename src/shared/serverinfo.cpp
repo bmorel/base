@@ -38,6 +38,7 @@ void serverinfo::cleanup()
 void serverinfo::reset()
 {
     lastping = lastinfo = -1;
+    sortedservers = false;
 }
 
 void serverinfo::addping(int rtt, int millis)
@@ -81,7 +82,7 @@ serverinfo *serverinfo::newserver(const char *name, int port, int priority, cons
     return si;
 }
 
-void serverinfo::update( size_t len, void const* data )
+void serverinfo::update( size_t len, void const* data, int serverdecay, int totalmillis, int lastreset )
 {
     char text[MAXTRANS];
     ucharbuf p(static_cast<unsigned char*>( const_cast<void*>( data ) ), len);
@@ -298,7 +299,7 @@ bool serverinfo::need_resolve( int& resolving )
     return ret;
 }
 
-void serverinfo::ping( ENetSocket& sock, int millis )
+void serverinfo::ping( ENetSocket& sock, int serverdecay, int millis )
 {
     if( m_address.host == ENET_HOST_ANY )
     {
@@ -315,3 +316,14 @@ void serverinfo::ping( ENetSocket& sock, int millis )
         cleanup();
     if(lastping < 0) lastping = millis ? millis : 1;
 }
+
+void serverinfo::sort( vector<serverinfo*> &servers )
+{
+    if( !sortedservers )
+		{
+			std::sort( servers.begin(), servers.end(), client::serverinfocompare );
+			sortedservers = true;
+		}
+}
+
+bool serverinfo::sortedservers = false;

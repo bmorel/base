@@ -4,16 +4,12 @@
 #include "defs.hpp"
 
 struct serverinfo;
-extern int totalmillis;
-extern bool sortedservers;
-extern vector<serverinfo*> servers;
-extern int serverdecay;
-extern int lastreset;
 
+extern vector<serverinfo*> servers;
 extern bool filterstring(char *dst, const char *src, bool newline, bool colour, bool whitespace, bool wsstrip, size_t len);
 namespace client
 {
-    extern int serverstat( serverinfo* );
+    extern bool serverinfocompare(serverinfo const*a, serverinfo const*b);
 }
 
 namespace server
@@ -57,6 +53,7 @@ private:
         RESOLVED
     } resolved;
 
+    static bool sortedservers;
     const char* description( void ) const;//only used at game/client.cpp:L: 38 57 3440
     void clearpings();
     void cleanup();
@@ -72,15 +69,16 @@ public:
     void cube_get_property( int property, int index );
     server_status server_status( void ) const;
     void writecfg( stream& file ) const;
-    void update( size_t len, void const* data );
+    void update( size_t len, void const* data, int serverdecay, int totalmillis, int lastreset );
     bool validate_resolve( char const* name, ENetAddress const& addr );
     bool need_resolve( int& resolving );
     bool is_same( ENetAddress const& addr ) const;
     bool is_same( char const* oname, int oport ) const;
-    void ping( ENetSocket& sock, int millis );
+    void ping( ENetSocket& sock, int serverdecay, int millis );
 
     static serverinfo *newserver(const char *name, int port = SERVER_PORT, int priority = 0, const char *desc = nullptr, const char *handle = nullptr, const char *flags = nullptr, const char *branch = nullptr, uint ip = ENET_HOST_ANY);
     static bool server_compatible( serverinfo const* );
+    static void sort( vector<serverinfo*> &servers );
 };
 
 #endif

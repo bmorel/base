@@ -220,7 +220,6 @@ int connectwithtimeout(ENetSocket sock, const char *hostname, const ENetAddress 
 }
 
 vector<serverinfo *> servers;
-bool sortedservers = true;
 ENetSocket pingsock = ENET_SOCKET_NULL;
 int lastinfo = 0;
 
@@ -267,7 +266,7 @@ void pingservers()
     loopi(maxservpings ? min(num_servers, maxservpings) : num_servers)
     {
         if(++lastping >= num_servers) lastping = 0;
-        servers[lastping]->ping( pingsock, tmp_millis );
+        servers[lastping]->ping( pingsock, serverdecay, tmp_millis );
     }
 
     if(searchlan && serverlanport)
@@ -333,12 +332,9 @@ void checkpings()
         }
         if(!si && searchlan) si = serverinfo::newserver(NULL, addr.port-1, 1, NULL, NULL, NULL, NULL, addr.host);
         if(!si) continue;
-        si->update( buf.dataLength, buf.data );
-        sortedservers = false;
+        si->update( buf.dataLength, buf.data, serverdecay, totalmillis, lastreset );
     }
 }
-
-static inline int serverinfocompare(serverinfo *a, serverinfo *b) { return client::servercompare(a, b) < 0; }
 
 void refreshservers()
 {
@@ -347,7 +343,6 @@ void refreshservers()
     if(totalmillis - lastrefresh > 1000)
     {
         loopv(servers) servers[i]->reset();
-        sortedservers = false;
         lastreset = totalmillis;
     }
     lastrefresh = totalmillis;
@@ -425,11 +420,7 @@ void retrieveservers(vector<char> &data)
 
 void sortservers()
 {
-    if(!sortedservers)
-    {
-        servers.sort(serverinfocompare);
-        sortedservers = true;
-    }
+    serverinfo::sort(servers);
 }
 COMMAND(0, sortservers, "");
 

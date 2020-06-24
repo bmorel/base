@@ -3244,12 +3244,12 @@ namespace client
         }
     }
 
-    int servercompare(serverinfo *a, serverinfo *b)
+    bool serverinfocompare(serverinfo const*a, serverinfo const*b)
     {
         int comp = a->version_compare( *b );
         if( comp != 0 )
         {
-            return comp;
+            return comp < 0;
         }
 
         if(serversortstyles.empty()) updateserversort();
@@ -3264,9 +3264,9 @@ namespace client
             }
 
             comp = a->compare(*b, style, reverse);
-            if( comp != 0 ) return comp;
+            if( comp != 0 ) return comp < 0;
         }
-        return strcmp( a->name(), b->name() );
+        return strcmp( a->name(), b->name() ) < 0;
     }
 
     void parsepacketclient(int chan, packetbuf &p)  // processes any updates from the server
@@ -3290,7 +3290,7 @@ namespace client
 
     void getservers(int server, int prop, int idx)
     {
-        if(server < 0) 
+        if(server < 0)
         {
             // this codes does not really hide stuff, it _removes_ stuff
             if (hideincompatibleservers)
