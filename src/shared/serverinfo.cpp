@@ -320,10 +320,10 @@ void serverinfo::ping( ENetSocket& sock, int serverdecay, int millis )
 void serverinfo::sort( vector<serverinfo*> &servers )
 {
     if( !sortedservers )
-		{
-			std::sort( servers.begin(), servers.end(), client::serverinfocompare );
-			sortedservers = true;
-		}
+    {
+        std::sort( servers.begin(), servers.end(), client::serverinfocompare );
+        sortedservers = true;
+    }
 }
 
 bool serverinfo::sortedservers = false;

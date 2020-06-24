@@ -466,3 +466,28 @@ void writeservercfg()
     }
     delete f;
 }
+
+VAR(IDF_PERSIST, hideincompatibleservers, 0, 0, 1);
+void getservers(int server, int prop, int idx)
+{
+    if(server < 0)
+    {
+        // this codes does not really hide stuff, it _removes_ stuff
+        if (hideincompatibleservers)
+        {
+            //servers.erase( std::remove_if(), servers.end()); refuses to work here, dunno why
+            //so for now let's keep the waste
+            vector<serverinfo *> servers_new;
+            std::copy_if( servers.begin(), servers.end(),
+                std::back_inserter( servers_new ),serverinfo::server_compatible );
+            servers = servers_new;
+        }
+
+        intret(servers.length());
+    }
+    else if(servers.inrange(server))
+    {
+        servers[server]->cube_get_property( prop, idx );
+    }
+}
+ICOMMAND(0, getserver, "bbb", (int *server, int *prop, int *idx, int *numargs), getservers(*server, *prop, *idx));

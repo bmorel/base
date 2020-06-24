@@ -464,8 +464,6 @@ extern void setlocations(bool wanthome = true);
 // client
 struct serverinfo;
 
-extern vector<serverinfo *> servers;
-
 extern void sendclientpacket(ENetPacket *packet, int chan);
 extern void flushclient();
 extern void disconnect(bool onlyclean = false, bool async = false);

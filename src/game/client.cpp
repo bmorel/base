@@ -21,7 +21,6 @@ namespace client
     VAR(IDF_PERSIST, showteamchange, 0, 1, 2); // 0 = never show, 1 = show only when switching between, 2 = show when entering match too
     VAR(IDF_PERSIST, showservervariables, 0, 0, 1); // determines if variables set by the server are printed to the console
     VAR(IDF_PERSIST, showmapvotes, 0, 1, 3); // shows map votes, 1 = only mid-game (not intermision), 2 = at all times, 3 = verbose
-    VAR(IDF_PERSIST, hideincompatibleservers, 0, 0, 1);
     VAR(IDF_PERSIST, playmentionedsound, 0, 0, 1);
 
     VAR(IDF_PERSIST, checkpointannounce, 0, 5, 7); // 0 = never, &1 = active players, &2 = all players, &4 = all players in gauntlet
@@ -3287,28 +3286,4 @@ namespace client
                 break;
         }
     }
-
-    void getservers(int server, int prop, int idx)
-    {
-        if(server < 0)
-        {
-            // this codes does not really hide stuff, it _removes_ stuff
-            if (hideincompatibleservers)
-            {
-                //servers.erase( std::remove_if(), servers.end()); refuses to work here, dunno why
-                //so for now let's keep the waste
-                vector<serverinfo *> servers_new;
-                std::copy_if( servers.begin(), servers.end(),
-                    std::back_inserter( servers_new ),serverinfo::server_compatible );
-                servers = servers_new;
-            }
-
-            intret(servers.length());
-        }
-        else if(servers.inrange(server))
-        {
-            servers[server]->cube_get_property( prop, idx );
-        }
-    }
-    ICOMMAND(0, getserver, "bbb", (int *server, int *prop, int *idx, int *numargs), getservers(*server, *prop, *idx));
 }
