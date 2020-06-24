@@ -3301,25 +3301,14 @@ namespace client
     {
         if(server < 0) 
         {
+            // this codes does not really hide stuff, it _removes_ stuff
             if (hideincompatibleservers)
             {
+                //servers.erase( std::remove_if(), servers.end()); refuses to work here, dunno why
+                //so for now let's keep the waste
                 vector<serverinfo *> servers_new;
-                for (int i = 0; i < servers.length(); i++)
-                {
-                    serverinfo* si = servers[i];
-                    // check that the server is compatible
-                    if (serverinfo::server_compatible(si))
-                    {
-                        servers_new.add(servers[i]);
-                    }
-                    else
-                    {
-                        if (client::serverstat(si) != 2)
-                        {
-                            servers_new.add(servers[i]);
-                        }
-                    }
-                }
+                std::copy_if( servers.begin(), servers.end(),
+                    std::back_inserter( servers_new ),serverinfo::server_compatible );
                 servers = servers_new;
             }
 

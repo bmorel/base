@@ -86,7 +86,7 @@ public:
     int version_compare( serverinfo const& other ) const;
     bool server_full( void ) const;
     server_status server_status( void ) const;
-    static bool server_compatible( serverinfo* );
+    static bool server_compatible( serverinfo const* );
     bool validate_resolve( char const* name, ENetAddress const& addr );
     bool need_resolve( int& resolving );
     ENetAddress const* address( void ) const;

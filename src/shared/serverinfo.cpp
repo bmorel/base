@@ -283,9 +283,9 @@ server_status serverinfo::server_status( void ) const
     }
 }
 
-bool serverinfo::server_compatible( serverinfo* si )
+bool serverinfo::server_compatible( serverinfo const* si )
 {
-    return !si->attr.empty() && si->attr[0] == server::getver(1);
+    return si->attr.empty() || si->attr[0] == server::getver(1);
 }
 
 bool serverinfo::validate_resolve( char const* name, ENetAddress const& addr )
