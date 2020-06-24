@@ -3244,15 +3244,6 @@ namespace client
         }
     }
 
-    int serverstat(serverinfo *a)
-    {
-        if(a->server_full())
-        {
-            return SSTAT_FULL;
-        }
-        return a->server_status();
-    }
-
     int servercompare(serverinfo *a, serverinfo *b)
     {
         int comp = a->version_compare( *b );

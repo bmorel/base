@@ -61,7 +61,6 @@ private:
     void clearpings();
     void cleanup();
     void addping(int rtt, int millis);
-    ENetAddress const* address( void ) const;
 public:
     serverinfo(uint ip, int port, int priority = 0);
     ~serverinfo();
@@ -71,7 +70,6 @@ public:
     int version_compare( serverinfo const& other ) const;
     char const* name( void ) const; //only used by resolverquery in serverbrowser.cpp and servercompare()
     void cube_get_property( int property, int index );
-    bool server_full( void ) const;
     server_status server_status( void ) const;
     void writecfg( stream& file ) const;
     void update( size_t len, void const* data );

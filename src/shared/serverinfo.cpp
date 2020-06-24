@@ -128,7 +128,7 @@ void serverinfo::cube_get_property( int prop, int idx )
             if(idx < 0) intret(11);
             else switch(idx)
             {
-                case 0: intret(client::serverstat(this)); break;
+                case 0: intret(server_status()); break;
                 case 1: result(m_name); break;
                 case 2: intret(port); break;
                 case 3: result(description()); break;
@@ -197,8 +197,8 @@ int serverinfo::compare( serverinfo const& other, int style, bool reverse ) cons
             index = 4;
             break;
         case SINFO_STATUS:
-            ac = client::serverstat( const_cast<serverinfo*>( this ) );
-            bc = client::serverstat( const_cast<serverinfo*>( &other ) );
+            ac = server_status();
+            bc = other.server_status();
             break;
         case SINFO_NUMPLRS:
             ac = numplayers;
@@ -242,13 +242,12 @@ int serverinfo::version_compare( serverinfo const& other ) const
     return 0;
 }
 
-bool serverinfo::server_full( void ) const
-{
-    return attr.size() > 4 && numplayers >= attr[4];
-}
-
 server_status serverinfo::server_status( void ) const
 {
+    if( attr.size() > 4 && numplayers >= attr[4] )
+    {
+        return SSTAT_FULL;
+    }
     if(attr.size() <= 5)
     {
         return SSTAT_UNKNOWN;
@@ -297,11 +296,6 @@ bool serverinfo::need_resolve( int& resolving )
     ++resolving;
     resolved = RESOLVING;
     return ret;
-}
-
-ENetAddress const* serverinfo::address( void ) const
-{
-    return &m_address;
 }
 
 void serverinfo::ping( ENetSocket& sock, int millis )

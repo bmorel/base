@@ -47,7 +47,6 @@ namespace client
     extern int servercompare(serverinfo *a, serverinfo *b);
     extern const char *getname();
     extern bool sendcmd(int nargs, const char *cmd, const char *arg);
-    extern int serverstat(serverinfo* a);
 }
 
 namespace hud
