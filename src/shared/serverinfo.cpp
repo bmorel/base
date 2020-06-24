@@ -199,22 +199,14 @@ int serverinfo::compare( serverinfo const& other, int style, bool reverse ) cons
             return 0;
         case SINFO_MODE:
             index = 1;
-            ac =       attr.size() > index ?       attr[index] : 0;
-            bc = other.attr.size() > index ? other.attr[index] : 0;
         case SINFO_MUTS:
             index = 2;
-            ac =       attr.size() > index ?       attr[index] : 0;
-            bc = other.attr.size() > index ? other.attr[index] : 0;
             break;
         case SINFO_TIME:
             index = 3;
-            ac =       attr.size() > index ?       attr[index] : 0;
-            bc = other.attr.size() > index ? other.attr[index] : 0;
             break;
         case SINFO_MAXPLRS:
             index = 4;
-            ac =       attr.size() > index ?       attr[index] : 0;
-            bc = other.attr.size() > index ? other.attr[index] : 0;
             break;
         case SINFO_STATUS:
             ac = client::serverstat( const_cast<serverinfo*>( this ) );
@@ -234,6 +226,11 @@ int serverinfo::compare( serverinfo const& other, int style, bool reverse ) cons
             break;
         default:
             return 0;
+    }
+    if( index != 0 )
+    {
+        ac =       attr.size() > index ?       attr[index] : 0;
+        bc = other.attr.size() > index ? other.attr[index] : 0;
     }
 
     if( ac != bc )
