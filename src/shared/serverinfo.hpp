@@ -60,7 +60,6 @@ private:
     const char* description( void ) const;//only used at game/client.cpp:L: 38 57 3440
     void clearpings();
     void cleanup();
-    void calcping();
     void addping(int rtt, int millis);
 public:
     serverinfo(uint ip, int port, int priority = 0);

@@ -47,19 +47,14 @@ void serverinfo::checkdecay(int decay)
     if(lastping < 0) lastping = totalmillis ? totalmillis : 1;
 }
 
-void serverinfo::calcping()
-{
-    int numpings = 0, totalpings = 0;
-    loopk(MAXPINGS) if(pings[k] != WAITING) { totalpings += pings[k]; numpings++; }
-    ping = numpings ? totalpings/numpings : WAITING;
-}
-
 void serverinfo::addping(int rtt, int millis)
 {
     if(millis >= lastping) lastping = -1;
     pings[nextping] = rtt;
     nextping = (nextping+1)%MAXPINGS;
-    calcping();
+    int numpings = 0, totalpings = 0;
+    loopk(MAXPINGS) if(pings[k] != WAITING) { totalpings += pings[k]; numpings++; }
+    ping = numpings ? totalpings/numpings : WAITING;
 }
 
 const char* serverinfo::description( void ) const
