@@ -35,6 +35,7 @@ private:
     vector<char *> players;
     vector<char *> handles;
     vector<int> attr;
+    ENetAddress m_address;
     string sdesc;
     string flags;
     string branch;
@@ -55,8 +56,6 @@ private:
         RESOLVING,
         RESOLVED
     } resolved;
-public:
-    ENetAddress address;
 
 public:
     serverinfo(uint ip, int port, int priority = 0);
@@ -80,6 +79,7 @@ public:
     void writecfg( stream& file ) const;
     void update( size_t len, void const* data );
     void cube_get_property( int property, int index );
+    bool is_same( ENetAddress const& addr ) const;
     bool is_same( char const* oname, int oport ) const;
     char const* name( void ) const; //only used by resolverquery in serverbrowser.cpp and servercompare()
     int compare( serverinfo const& other, int style, bool reverse ) const;
@@ -89,6 +89,7 @@ public:
     static bool server_compatible( serverinfo* );
     bool validate_resolve( char const* name, ENetAddress const& addr );
     bool need_resolve( int& resolving );
+    ENetAddress const* address( void ) const;
 };
 
 #endif

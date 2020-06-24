@@ -12,8 +12,8 @@ serverinfo::serverinfo(uint ip, int port, int priority)
  : numplayers(0), resolved(ip==ENET_HOST_ANY ? UNRESOLVED : RESOLVED), port(port), priority(priority)
 {
     m_name[0] = map[0] = sdesc[0] = authhandle[0] = flags[0] = branch[0] = '\0';
-    address.host = ip;
-    address.port = port+1;
+    m_address.host = ip;
+    m_address.port = port+1;
     clearpings();
 }
 serverinfo::~serverinfo() { cleanup(); }
@@ -77,7 +77,7 @@ serverinfo *serverinfo::newserver(const char *name, int port, int priority, cons
     serverinfo *si = new serverinfo(ip, port, priority);
 
     if(name) copystring(si->m_name, name);
-    else if(ip == ENET_HOST_ANY || enet_address_get_host_ip(&si->address, si->m_name, sizeof(si->m_name)) < 0)
+    else if(ip == ENET_HOST_ANY || enet_address_get_host_ip(&si->m_address, si->m_name, sizeof(si->m_name)) < 0)
     {
         delete si;
         return NULL;
@@ -169,6 +169,11 @@ void serverinfo::cube_get_property( int prop, int idx )
     }
 }
 
+bool serverinfo::is_same( ENetAddress const& addr ) const
+{
+    return m_address.host == addr.host && m_address.port == addr.port;
+}
+
 bool serverinfo::is_same( char const* oname, int oport ) const
 {
     return 0 == strcmp( m_name, oname ) && port == oport;
@@ -243,9 +248,9 @@ int serverinfo::compare( serverinfo const& other, int style, bool reverse ) cons
 int serverinfo::version_compare( serverinfo const& other ) const
 {
     int ac = 0, bc = 0;
-    ac = address.host == ENET_HOST_ANY || ping >= serverinfo::WAITING || attr.empty() ? -1 : attr[0] == VERSION_GAME ? 0x7FFF : clamp(attr[0], 0, 0x7FFF-1);
+    ac = m_address.host == ENET_HOST_ANY || ping >= serverinfo::WAITING || attr.empty() ? -1 : attr[0] == VERSION_GAME ? 0x7FFF : clamp(attr[0], 0, 0x7FFF-1);
 
-    bc = other.address.host == ENET_HOST_ANY || other.ping >= serverinfo::WAITING || other.attr.empty() ? -1 : other.attr[0] == VERSION_GAME ? 0x7FFF : clamp(other.attr[0], 0, 0x7FFF-1);
+    bc = other.m_address.host == ENET_HOST_ANY || other.ping >= serverinfo::WAITING || other.attr.empty() ? -1 : other.attr[0] == VERSION_GAME ? 0x7FFF : clamp(other.attr[0], 0, 0x7FFF-1);
 
     if(ac > bc) return -1;
     if(ac < bc) return  1;
@@ -293,13 +298,13 @@ bool serverinfo::validate_resolve( char const* name, ENetAddress const& addr )
         return false;
     }
     resolved = serverinfo::RESOLVED;
-    address.host = addr.host;
+    m_address.host = addr.host;
     return true;
 }
 
 bool serverinfo::need_resolve( int& resolving )
 {
-    if( resolved == RESOLVED || address.host != ENET_HOST_ANY )
+    if( resolved == RESOLVED || m_address.host != ENET_HOST_ANY )
     {
         return false;
     }
@@ -307,4 +312,9 @@ bool serverinfo::need_resolve( int& resolving )
     ++resolving;
     resolved = RESOLVING;
     return ret;
+}
+
+ENetAddress const* serverinfo::address( void ) const
+{
+    return &m_address;
 }

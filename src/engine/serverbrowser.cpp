@@ -265,10 +265,13 @@ void pingservers()
     {
         serverinfo &si = *servers[lastping];
         if(++lastping >= servers.length()) lastping = 0;
-        if(si.address.host == ENET_HOST_ANY) continue;
+        if(si.address()->host == ENET_HOST_ANY)
+        {
+            continue;
+        }
         buf.data = ping;
         buf.dataLength = p.length();
-        enet_socket_send(pingsock, &si.address, &buf, 1);
+        enet_socket_send(pingsock, si.address(), &buf, 1);
 
         si.checkdecay(serverdecay*1000);
     }
@@ -328,7 +331,14 @@ void checkpings()
         int len = enet_socket_receive(pingsock, &addr, &buf, 1);
         if(len <= 0) return;
         serverinfo *si = NULL;
-        loopv(servers) if(addr.host == servers[i]->address.host && addr.port == servers[i]->address.port) { si = servers[i]; break; }
+        loopv(servers)
+        {
+            if( servers[i]->is_same( addr ) )
+            {
+                si = servers[i];
+                break;
+            }
+        }
         if(!si && searchlan) si = serverinfo::newserver(NULL, addr.port-1, 1, NULL, NULL, NULL, NULL, addr.host);
         if(!si) continue;
         si->update( buf.dataLength, buf.data );
