@@ -9,7 +9,7 @@
 #include "serverinfo.hpp"
 
 serverinfo::serverinfo(uint ip, int port, int priority)
- : numplayers(0), resolved(ip==ENET_HOST_ANY ? UNRESOLVED : RESOLVED), port(port), priority(priority)
+ : numplayers(0), port(port), priority(priority), resolved(ip==ENET_HOST_ANY ? UNRESOLVED : RESOLVED)
 {
     m_name[0] = map[0] = sdesc[0] = authhandle[0] = flags[0] = branch[0] = '\0';
     m_address.host = ip;
