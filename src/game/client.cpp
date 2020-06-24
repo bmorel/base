@@ -3250,23 +3250,7 @@ namespace client
         {
             return SSTAT_FULL;
         }
-        else if(a->attr.length() > 5) switch(a->attr[5])
-        {
-            case MM_LOCKED:
-            {
-                return SSTAT_LOCKED;
-            }
-            case MM_PRIVATE:
-            case MM_PASSWORD:
-            {
-                return SSTAT_PRIVATE;
-            }
-            default:
-            {
-                return SSTAT_OPEN;
-            }
-        }
-        return SSTAT_UNKNOWN;
+        return a->server_status();
     }
 
     int servercompare(serverinfo *a, serverinfo *b)
@@ -3324,12 +3308,9 @@ namespace client
                 {
                     serverinfo* si = servers[i];
                     // check that the server is compatible
-                    if (si->attr.inrange(0))
+                    if (serverinfo::server_compatible(si))
                     {
-                        if (si->attr[0] == server::getver(1))
-                        {
-                            servers_new.add(servers[i]);
-                        }
+                        servers_new.add(servers[i]);
                     }
                     else
                     {

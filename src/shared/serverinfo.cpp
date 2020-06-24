@@ -261,3 +261,32 @@ bool serverinfo::server_full( void ) const
 {
     return attr.size() > 4 && numplayers >= attr[4];
 }
+
+server_status serverinfo::server_status( void ) const
+{
+    if(attr.size() <= 5)
+    {
+        return SSTAT_UNKNOWN;
+    }
+    switch(attr[5])
+    {
+        case MM_LOCKED:
+        {
+            return SSTAT_LOCKED;
+        }
+        case MM_PRIVATE:
+        case MM_PASSWORD:
+        {
+            return SSTAT_PRIVATE;
+        }
+        default:
+        {
+            return SSTAT_OPEN;
+        }
+    }
+}
+
+bool serverinfo::server_compatible( serverinfo* si )
+{
+    return !si->attr.empty() && si->attr[0] == server::getver(1);
+}

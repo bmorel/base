@@ -16,7 +16,13 @@ namespace client
     extern int serverstat( serverinfo* );
 }
 
+namespace server
+{
+    extern int getver( int );
+}
+
 enum { SINFO_NONE = 0, SINFO_STATUS, SINFO_NAME, SINFO_PORT, SINFO_QPORT, SINFO_DESC, SINFO_MODE, SINFO_MUTS, SINFO_MAP, SINFO_TIME, SINFO_NUMPLRS, SINFO_MAXPLRS, SINFO_PING, SINFO_PRIO, SINFO_MAX };
+
 struct serverinfo
 {
     enum
@@ -43,9 +49,9 @@ private:
     string map;
     int ping;
     int numplayers;
+    vector<int> attr;
 public:
     ENetAddress address;
-    vector<int> attr;
     int resolved;
 
 public:
@@ -73,10 +79,11 @@ public:
     bool same_name( char const* other ) const;
     bool is_same( char const* oname, int oport ) const;
     char const* name( void ) const; //only used by resolverquery in serverbrowser.cpp and servercompare()
-    static bool server_compatible( serverinfo* );
     int compare( serverinfo const& other, int style, bool reverse ) const;
     int version_compare( serverinfo const& other ) const;
     bool server_full( void ) const;
+    server_status server_status( void ) const;
+    static bool server_compatible( serverinfo* );
 };
 
 #endif
