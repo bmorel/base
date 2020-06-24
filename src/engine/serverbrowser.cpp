@@ -290,12 +290,9 @@ void checkresolver()
     int resolving = 0;
     loopv(servers)
     {
-        serverinfo &si = *servers[i];
-        if(si.resolved == serverinfo::RESOLVED) continue;
-        if(si.address.host == ENET_HOST_ANY)
+        if( servers[i]->need_resolve( resolving ) )
         {
-            if(si.resolved == serverinfo::UNRESOLVED) { si.resolved = serverinfo::RESOLVING; resolverquery(si.name()); }
-            resolving++;
+            resolverquery(servers[i]->name());
         }
     }
     if(!resolving) return;
@@ -307,11 +304,8 @@ void checkresolver()
         if(!resolvercheck(&name, &addr)) break;
         loopv(servers)
         {
-            serverinfo &si = *servers[i];
-            if( name == si.name() )
+            if( servers[i]->validate_resolve( name, addr ) )
             {
-                si.resolved = serverinfo::RESOLVED;
-                si.address.host = addr.host;
                 break;
             }
         }

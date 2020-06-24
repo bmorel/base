@@ -169,11 +169,6 @@ void serverinfo::cube_get_property( int prop, int idx )
     }
 }
 
-bool serverinfo::same_name( char const* oname ) const
-{
-    return 0 == strcmp( m_name, oname );
-}
-
 bool serverinfo::is_same( char const* oname, int oport ) const
 {
     return 0 == strcmp( m_name, oname ) && port == oport;
@@ -289,4 +284,27 @@ server_status serverinfo::server_status( void ) const
 bool serverinfo::server_compatible( serverinfo* si )
 {
     return !si->attr.empty() && si->attr[0] == server::getver(1);
+}
+
+bool serverinfo::validate_resolve( char const* name, ENetAddress const& addr )
+{
+    if( m_name != name )
+    {
+        return false;
+    }
+    resolved = serverinfo::RESOLVED;
+    address.host = addr.host;
+    return true;
+}
+
+bool serverinfo::need_resolve( int& resolving )
+{
+    if( resolved == RESOLVED || address.host != ENET_HOST_ANY )
+    {
+        return false;
+    }
+    int ret = resolved == UNRESOLVED;
+    ++resolving;
+    resolved = RESOLVING;
+    return ret;
 }

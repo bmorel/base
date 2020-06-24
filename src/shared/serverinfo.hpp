@@ -30,29 +30,33 @@ struct serverinfo
         MAXPINGS = 3,
         WAITING = INT_MAX
     };
-    enum { UNRESOLVED = 0, RESOLVING, RESOLVED };
 
 private:
+    vector<char *> players;
+    vector<char *> handles;
+    vector<int> attr;
     string sdesc;
     string flags;
     string branch;
     string authhandle;
     string m_name;
-    vector<char *> players;
-    vector<char *> handles;
+    string map;
     int lastping;
     int nextping;
     int pings[MAXPINGS];
     int lastinfo;
     int port;
     int priority;
-    string map;
     int ping;
     int numplayers;
-    vector<int> attr;
+    enum
+    {
+        UNRESOLVED,
+        RESOLVING,
+        RESOLVED
+    } resolved;
 public:
     ENetAddress address;
-    int resolved;
 
 public:
     serverinfo(uint ip, int port, int priority = 0);
@@ -76,7 +80,6 @@ public:
     void writecfg( stream& file ) const;
     void update( size_t len, void const* data );
     void cube_get_property( int property, int index );
-    bool same_name( char const* other ) const;
     bool is_same( char const* oname, int oport ) const;
     char const* name( void ) const; //only used by resolverquery in serverbrowser.cpp and servercompare()
     int compare( serverinfo const& other, int style, bool reverse ) const;
@@ -84,6 +87,8 @@ public:
     bool server_full( void ) const;
     server_status server_status( void ) const;
     static bool server_compatible( serverinfo* );
+    bool validate_resolve( char const* name, ENetAddress const& addr );
+    bool need_resolve( int& resolving );
 };
 
 #endif
