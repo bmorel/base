@@ -103,7 +103,7 @@ void serverinfo::update( size_t len, void const* data )
     numplayers = getint(p);
     int numattr = getint(p);
     attr.clear();
-    loopj(numattr) attr.add(getint(p));
+    loopj(numattr) attr.emplace_back(getint(p));
     int gver = attr.empty() ? 0 : attr[0];
     getstring(text, p);
     filterstring(map, text, false, true, true, false, sizeof( map ));
@@ -120,13 +120,13 @@ void serverinfo::update( size_t len, void const* data )
     {
         if(p.overread()) break;
         getstring(text, p);
-        players.add(newstring(text));
+        players.emplace_back(newstring(text));
     }
     if(gver >= 225) loopi(numplayers)
     {
         if(p.overread()) break;
         getstring(text, p);
-        handles.add(newstring(text));
+        handles.emplace_back(newstring(text));
     }
     sortedservers = false;
 }
@@ -155,16 +155,16 @@ void serverinfo::cube_get_property( int prop, int idx )
             }
             break;
         case 1:
-            if(idx < 0) intret(attr.length());
-            else if(attr.inrange(idx)) intret(attr[idx]);
+            if(idx < 0) intret(attr.size());
+            else if( idx < attr.size()) intret(attr[idx]);
             break;
         case 2:
-            if(idx < 0) intret(players.length());
-            else if(players.inrange(idx)) result(players[idx].data());
+            if(idx < 0) intret(players.size());
+            else if( idx < players.size()) result(players[idx].data());
             break;
         case 3:
-            if(idx < 0) intret(handles.length());
-            else if(handles.inrange(idx)) result(handles[idx].data());
+            if(idx < 0) intret(handles.size());
+            else if( idx < handles.size()) result(handles[idx].data());
             break;
     }
 }

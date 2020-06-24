@@ -32,9 +32,9 @@ struct serverinfo
     };
 
 private:
-    vector<std::string> players;
-    vector<std::string> handles;
-    vector<int> attr;
+    std::vector<std::string> players;
+    std::vector<std::string> handles;
+    std::vector<int> attr;
     ENetAddress m_address;
     string sdesc;
     string flags;
