@@ -9,7 +9,7 @@
 #include "serverinfo.hpp"
 
 serverinfo::serverinfo(uint ip, int port, int priority)
- : numplayers(0), port(port), priority(priority), resolved(ip==ENET_HOST_ANY ? UNRESOLVED : RESOLVED)
+ : port(port), priority(priority), numplayers(0), resolved(ip==ENET_HOST_ANY ? UNRESOLVED : RESOLVED)
 {
     m_name[0] = map[0] = sdesc[0] = authhandle[0] = flags[0] = branch[0] = '\0';
     m_address.host = ip;
@@ -29,9 +29,9 @@ void serverinfo::clearpings()
 void serverinfo::cleanup()
 {
     clearpings();
-    attr.setsize(0);
-    players.deletearrays();
-    handles.deletearrays();
+    attr.clear();
+    players.clear();
+    handles.clear();
     numplayers = 0;
 }
 
@@ -160,11 +160,11 @@ void serverinfo::cube_get_property( int prop, int idx )
             break;
         case 2:
             if(idx < 0) intret(players.length());
-            else if(players.inrange(idx)) result(players[idx]);
+            else if(players.inrange(idx)) result(players[idx].data());
             break;
         case 3:
             if(idx < 0) intret(handles.length());
-            else if(handles.inrange(idx)) result(handles[idx]);
+            else if(handles.inrange(idx)) result(handles[idx].data());
             break;
     }
 }
