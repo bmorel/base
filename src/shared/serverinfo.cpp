@@ -1,9 +1,12 @@
+#include <algorithm>
+#include <assert.h>
 #include <limits.h>
 #include <zlib.h>
 #include <SDL2/SDL.h>
 #include <enet/enet.h>
 #include <GL/gl.h>
 
+using std::swap;
 #include "tools.h"
 #include "command.h"
 #include "serverinfo.hpp"
