@@ -2,6 +2,7 @@
 #define __GAME_H__
 
 #include "engine.h"
+#include "serverinfo.hpp"
 
 #define VERSION_GAMEID "fps"
 #define VERSION_DEMOMAGIC "BLUE_NEBULA_DEMO"
