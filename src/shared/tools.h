@@ -92,8 +92,8 @@ static inline int bitscan(uint mask)
 #define loopkrev(m) looprev(k,m)
 #define looplrev(m) looprev(l,m)
 
-#define DELETEP(p) if(p) { delete   p; p = 0; }
-#define DELETEA(p) if(p) { delete[] p; p = 0; }
+#define DELETEP(p) if(p) { delete   p; p = nullptr; }
+#define DELETEA(p) if(p) { delete[] p; p = nullptr; }
 
 #define PI  (3.1415927f)
 #define PI2 (2*PI)
@@ -256,10 +256,10 @@ struct databuf
         return buf[length() - 1];
     }
 
-    databuf() : buf(NULL), len(0), maxlen(0), flags(0) {}
+    databuf() : buf(nullptr), len(0), maxlen(0), flags(0) {}
 
     template<class U>
-    databuf(T *buf, U maxlen) : buf(buf), len(0), maxlen((int)maxlen), flags(0) {}
+    databuf(T *buf, U maxlen) : buf(buf), len(0), maxlen(static_cast<int>(maxlen)), flags(0) {}
 
     void reset()
     {
@@ -305,7 +305,7 @@ struct databuf
     void put(const T *vals, int numvals)
     {
         if(maxlen-len<numvals) flags |= OVERWROTE;
-        memcpy(&buf[len], (const void *)vals, min(maxlen-len, numvals)*sizeof(T));
+        memcpy(&buf[len], vals, min(maxlen-len, numvals)*sizeof(T));
         len += min(maxlen-len, numvals);
     }
 
@@ -313,7 +313,7 @@ struct databuf
     {
         int read = min(maxlen-len, numvals);
         if(read<numvals) flags |= OVERREAD;
-        memcpy(vals, (void *)&buf[len], read*sizeof(T));
+        memcpy(vals, &buf[len], read*sizeof(T));
         len += read;
         return read;
     }
@@ -353,8 +353,8 @@ struct packetbuf : ucharbuf
     packetbuf(ENetPacket *packet) : ucharbuf(packet->data, packet->dataLength), packet(packet), growth(0) {}
     packetbuf(int growth, int pflags = 0) : growth(growth)
     {
-        packet = enet_packet_create(NULL, growth, pflags);
-        buf = (uchar *)packet->data;
+        packet = enet_packet_create(nullptr, growth, pflags);
+        buf = packet->data;
         maxlen = packet->dataLength;
     }
     ~packetbuf() { cleanup(); }
@@ -364,7 +364,7 @@ struct packetbuf : ucharbuf
     void resize(int n)
     {
         enet_packet_resize(packet, n);
-        buf = (uchar *)packet->data;
+        buf = packet->data;
         maxlen = packet->dataLength;
     }
 
@@ -399,7 +399,7 @@ struct packetbuf : ucharbuf
 
     void cleanup()
     {
-        if(growth > 0 && packet && !packet->referenceCount) { enet_packet_destroy(packet); packet = NULL; buf = NULL; len = maxlen = 0; }
+        if(growth > 0 && packet && !packet->referenceCount) { enet_packet_destroy(packet); packet = nullptr; buf = nullptr; len = maxlen = 0; }
     }
 };
 
@@ -551,7 +551,7 @@ template<size_t N> inline char *copystring(char (&d)[N], const stringslice &s) {
 
 static inline uint memhash(const void *ptr, int len)
 {
-    const uchar *data = (const uchar *)ptr;
+    const uchar *data = static_cast<const uchar*>( ptr );
     uint h = 5381;
     loopi(len) h = ((h<<5)+h)^data[i];
     return h;
@@ -561,7 +561,7 @@ static inline uint hthash(const stringslice &s) { return memhash(s.str, s.len); 
 
 static inline bool htcmp(const stringslice &x, const char *y)
 {
-    return x.len == (int)strlen(y) && !memcmp(x.str, y, x.len);
+    return x.len == strlen(y) && !memcmp(x.str, y, x.len);
 }
 
 static inline uint hthash(int key)
@@ -689,16 +689,16 @@ public:
     }
 
     // older API
-    vector() : buf(NULL), alen(0), ulen(0)
+    vector() : buf(nullptr), alen(0), ulen(0)
     {
     }
 
-    vector(const vector &v) : buf(NULL), alen(0), ulen(0)
+    vector(const vector &v) : buf(nullptr), alen(0), ulen(0)
     {
         *this = v;
     }
 
-    ~vector() { shrink(0); if(buf) delete[] (uchar *)buf; }
+    ~vector() { shrink(0); if(buf) delete[] reinterpret_cast<uchar*>( buf ); }
 
     vector<T> &operator=(const vector<T> &v)
     {
@@ -747,7 +747,7 @@ public:
         else
         {
             growbuf(ulen+v.ulen);
-            if(v.ulen) memcpy(&buf[ulen], (void  *)v.buf, v.ulen*sizeof(T));
+            if(v.ulen) memcpy(&buf[ulen], v.buf, v.ulen*sizeof(T));
             ulen += v.ulen;
             v.ulen = 0;
         }
@@ -767,7 +767,7 @@ public:
     T &operator[](int i) { ASSERT(i>=0 && i<ulen); return buf[i]; }
     const T &operator[](int i) const { ASSERT(i >= 0 && i<ulen); return buf[i]; }
 
-    void disown() { buf = NULL; alen = ulen = 0; }
+    void disown() { buf = nullptr; alen = ulen = 0; }
 
     void shrink(int i) { ASSERT(i<=ulen); if(isclass<T>::no) ulen = i; else while(ulen>i) drop(); }
     void setsize(int i) { ASSERT(i<=ulen); ulen = i; }
@@ -797,10 +797,10 @@ public:
         uchar *newbuf = new uchar[alen*sizeof(T)];
         if(olen > 0)
         {
-            if(ulen > 0) memcpy(newbuf, (void *)buf, ulen*sizeof(T));
-            delete[] (uchar *)buf;
+            if(ulen > 0) memcpy(newbuf, static_cast<void*>(buf), ulen*sizeof(T));
+            delete[] reinterpret_cast<uchar*>(buf);
         }
-        buf = (T *)newbuf;
+        buf = reinterpret_cast<T*>( newbuf );
     }
 
     databuf<T> reserve(int sz)
@@ -1005,11 +1005,11 @@ public:
     }
 
     // old API
-    smallvector() : buf(NULL), len(0)
+    smallvector() : buf(nullptr), len(0)
     {
     }
 
-    smallvector(const smallvector &v) : buf(NULL), len(0)
+    smallvector(const smallvector &v) : buf(nullptr), len(0)
     {
         *this = v;
     }
@@ -1029,10 +1029,10 @@ public:
         len = max(sz, 0);
         if(len)
         {
-            buf = (T *)realloc(buf, len*sizeof(T));
+            buf = static_cast<T*>(realloc(buf, len*sizeof(T)));
             if(!buf) abort();
         }
-        else if(buf) { free(buf); buf = NULL; }
+        else if(buf) { free(buf); buf = nullptr; }
     }
 
     T &add(const T &x)
@@ -1197,8 +1197,8 @@ template<class H, class E, class K, class T> struct hashbase
       : size(size)
     {
         numelems = 0;
-        chunks = NULL;
-        unused = NULL;
+        chunks = nullptr;
+        unused = nullptr;
         chains = new chain *[size];
         memset(chains, 0, size*sizeof(chain *));
     }
@@ -1247,7 +1247,7 @@ template<class H, class E, class K, class T> struct hashbase
     template<class U>
     T *access(const U &key)
     {
-        HTFIND(&, NULL);
+        HTFIND(&, nullptr);
     }
 
     template<class U, class V>
@@ -1308,13 +1308,13 @@ template<class H, class E, class K, class T> struct hashbase
         if(!numelems) return;
         memset(chains, 0, size*sizeof(chain *));
         numelems = 0;
-        unused = NULL;
+        unused = nullptr;
         deletechunks();
     }
 
-    static inline chain *enumnext(void *i) { return ((chain *)i)->next; }
-    static inline K &enumkey(void *i) { return H::getkey(((chain *)i)->elem); }
-    static inline T &enumdata(void *i) { return H::getdata(((chain *)i)->elem); }
+    static inline chain *enumnext(void *i) { return (static_cast<chain*>(i))->next; }
+    static inline K &enumkey(void *i) { return H::getkey(((static_cast<chain*>(i)->elem))); }
+    static inline T &enumdata(void *i) { return H::getdata((static_cast<chain*>(i))->elem); }
 };
 
 template<class T> struct hashset : hashbase<hashset<T>, T, T, T>
@@ -1652,12 +1652,12 @@ static inline uchar cubeupper(uchar c)
     extern const uchar cubeupperchars[256];
     return cubeupperchars[c];
 }
-extern size_t decodeutf8(uchar *dst, size_t dstlen, const uchar *src, size_t srclen, size_t *carry = NULL);
-extern size_t encodeutf8(uchar *dstbuf, size_t dstlen, const uchar *srcbuf, size_t srclen, size_t *carry = NULL);
+extern size_t decodeutf8(uchar *dst, size_t dstlen, const uchar *src, size_t srclen, size_t *carry = nullptr);
+extern size_t encodeutf8(uchar *dstbuf, size_t dstlen, const uchar *srcbuf, size_t srclen, size_t *carry = nullptr);
 
 extern int crcstream(stream *f);
 extern int crcfile(const char *s);
-extern char *makerelpath(const char *dir, const char *file, const char *prefix = NULL, const char *cmd = NULL);
+extern char *makerelpath(const char *dir, const char *file, const char *prefix = nullptr, const char *cmd = nullptr);
 extern char *makefile(const char *s, const char *e = "", int revision = 0, int start = 1, bool store = false, bool skip = false);
 extern char *path(char *s, bool simple = false);
 extern char *copypath(const char *s, bool simple = false);
@@ -1675,8 +1675,8 @@ extern stream *openrawfile(const char *filename, const char *mode);
 extern stream *openzipfile(const char *filename, const char *mode);
 extern stream *openfile(const char *filename, const char *mode);
 extern stream *opentempfile(const char *filename, const char *mode);
-extern stream *opengzfile(const char *filename, const char *mode, stream *file = NULL, int level = Z_BEST_COMPRESSION);
-extern stream *openutf8file(const char *filename, const char *mode, stream *file = NULL);
+extern stream *opengzfile(const char *filename, const char *mode, stream *file = nullptr, int level = Z_BEST_COMPRESSION);
+extern stream *openutf8file(const char *filename, const char *mode, stream *file = nullptr);
 extern char *loadstream(stream *f, size_t *size, bool utf8 = true);
 extern char *loadfile(const char *fn, size_t *size, bool utf8 = true);
 extern bool listdir(const char *dir, bool rel, const char *ext, vector<char *> &files);
