@@ -1327,7 +1327,7 @@ void serverloop()
         }
 #endif
     }
-    exit(EXIT_SUCCESS);
+    //exit(EXIT_SUCCESS); // unreachable code, should find why.
 }
 
 void limitdupclients()
